@@ -1,0 +1,12 @@
+{
+  "name": "krai-ah",
+  "version": "1.0.0",
+  "description": "Minimal Discord Voice Join/Leave Logger",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --env-file=.env index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0"
+  }
+}

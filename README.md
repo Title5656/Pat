@@ -5,8 +5,11 @@
 2. ส่งข้อความแจ้งเตือนเมื่อสมาชิกออกจากห้อง Voice Channel
 
 ```text
-🟢 @User เข้าห้อง General
-🔴 @User ออกจากห้อง General
+> 🟢 เข้าห้อง: 🔊 General
+> 👤 @User
+
+> 🔴 ออกจากห้อง: 🔊 General
+> 👤 @User
 ```
 
 ---

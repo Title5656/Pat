@@ -52,11 +52,11 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
 
     if (isJoin) {
-      const channelName = newState.channel?.name ?? 'Unknown';
-      await channel.send(`🟢 <@${member.id}> เข้าห้อง ${channelName}`);
+      const channelTag = newState.channelId ? `<#${newState.channelId}>` : (newState.channel?.name ?? 'Unknown');
+      await channel.send(`> 🟢 **เข้าห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
     } else if (isLeave) {
-      const channelName = oldState.channel?.name ?? 'Unknown';
-      await channel.send(`🔴 <@${member.id}> ออกจากห้อง ${channelName}`);
+      const channelTag = oldState.channelId ? `<#${oldState.channelId}>` : (oldState.channel?.name ?? 'Unknown');
+      await channel.send(`> 🔴 **ออกจากห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
     }
   } catch (err) {
     console.error('Error handling voice log event:', err.message);

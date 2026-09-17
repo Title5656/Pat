@@ -145,7 +145,7 @@ Ready! Logged in as Krai-ah#7038
 Create a **Web Service** from this repository. Use `npm ci` as the build command and `node index.js` as the start command. Set `DISCORD_TOKEN` and `VOICE_LOG_CHANNEL_ID` in Render's environment settings; never commit `.env`. Render provides `PORT` automatically, and `/` returns `ok` when Discord is connected (HTTP 503 otherwise).
 
 Render Free web services sleep after 15 minutes without inbound requests. An external monitor must request the service URL regularly to keep the bot connected. Discord voice events cannot wake a sleeping web service, so events during sleep or restarts may be missed.
-This repository includes a GitHub Actions ping every five minutes. GitHub may delay or skip scheduled runs and automatically disables schedules in public repositories after 60 days without repository activity. Use a separate uptime monitor for longer-term service.
+This repository includes a GitHub Actions ping every ten minutes. GitHub may delay or skip scheduled runs and automatically disables schedules in public repositories after 60 days without repository activity. Use a separate uptime monitor for longer-term service.
 
 ---
 

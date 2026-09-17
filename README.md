@@ -172,16 +172,3 @@ Render Free web services sleep after 15 minutes without inbound requests. An ext
 This repository includes a GitHub Actions ping every ten minutes. GitHub may delay or skip scheduled runs and automatically disables schedules in public repositories after 60 days without repository activity. Use a separate uptime monitor for longer-term service.
 
 Set the repository Actions variable `RENDER_SERVICE_URL` to the actual Render service URL under **Settings → Secrets and variables → Actions → Variables**. The keepalive workflow uses this URL; renaming the repository or bot does not automatically rename the Render service.
-
----
-
-## Troubleshooting (การแก้ไขปัญหาเบื้องต้น)
-
-- **`Error: DISCORD_TOKEN is not defined in environment variables.`**:
-  ตรวจสอบว่าบันทึกไฟล์ `.env` แล้วหรือยัง (กด `Ctrl + S`) และตรวจสอบว่าชื่อตัวแปรสะกดถูกต้อง
-- **บอทไม่ส่งข้อความเมื่อมีคนเข้า-ออก**:
-  1. ตรวจสอบว่าบอทอยู่ใน Server เดียวกับที่มีห้องเสียงและห้อง Log หรือไม่
-  2. ตรวจสอบว่าบอทมีสิทธิ์ `View Channel` และ `Send Messages` ในห้อง Log ที่ระบุใน `VOICE_LOG_CHANNEL_ID` หรือไม่
-  3. ตรวจสอบว่าผู้ใช้ที่เข้าห้องไม่ใช่บัญชีบอท (บอทจะไม่แจ้งเตือนบัญชีที่เป็นบอท)
-
----

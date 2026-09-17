@@ -46,19 +46,21 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
 }
 
 function state(channelId, bot = false) {
-  return { channelId, member: { id: 'user', user: { bot } } };
+  return { channelId, member: { id: 'user', displayName: 'Pat', user: { bot } } };
 }
 
-test('logs a join with the channel and member mentions', async () => {
+test('logs a join with the display name and disables mentions', async () => {
   const app = setup();
   await app.emit(state(null), state('voice'));
-  assert.deepEqual(app.messages, ['> 🟢 **เข้าห้อง:** <#voice>\n> 👤 <@user>\n_ _']);
+  assert.equal(app.messages[0].content, '> 🟢 **เข้าห้อง:** <#voice>\n> 👤 Pat\n_ _');
+  assert.equal(JSON.stringify(app.messages[0].allowedMentions), '{"parse":[]}');
 });
 
 test('logs a leave and falls back to the old member', async () => {
   const app = setup();
   await app.emit(state('voice'), { channelId: null, member: null });
-  assert.deepEqual(app.messages, ['> 🔴 **ออกจากห้อง:** <#voice>\n> 👤 <@user>\n_ _']);
+  assert.equal(app.messages[0].content, '> 🔴 **ออกจากห้อง:** <#voice>\n> 👤 Pat\n_ _');
+  assert.equal(JSON.stringify(app.messages[0].allowedMentions), '{"parse":[]}');
 });
 
 for (const [name, oldState, newState] of [

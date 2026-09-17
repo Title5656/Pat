@@ -60,10 +60,16 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
     if (isJoin) {
       const channelTag = `<#${newState.channelId}>`;
-      await channel.send(`> 🟢 **เข้าห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
+      await channel.send({
+        content: `> 🟢 **เข้าห้อง:** ${channelTag}\n> 👤 ${member.displayName}\n_ _`,
+        allowedMentions: { parse: [] },
+      });
     } else if (isLeave) {
       const channelTag = `<#${oldState.channelId}>`;
-      await channel.send(`> 🔴 **ออกจากห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
+      await channel.send({
+        content: `> 🔴 **ออกจากห้อง:** ${channelTag}\n> 👤 ${member.displayName}\n_ _`,
+        allowedMentions: { parse: [] },
+      });
     }
   } catch (err) {
     console.error('Error handling voice log event:', err.message);

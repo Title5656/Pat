@@ -18,6 +18,13 @@ const client = new Client({
   ],
 });
 
+if (process.env.PORT) {
+  require('node:http').createServer((_req, res) => {
+    res.writeHead(client.isReady() ? 200 : 503, { 'content-type': 'text/plain' });
+    res.end(client.isReady() ? 'ok' : 'discord disconnected');
+  }).listen(process.env.PORT, '0.0.0.0');
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
 });

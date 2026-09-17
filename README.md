@@ -59,7 +59,7 @@
 - **Node.js 24 LTS**: ใช้ความสามารถ Native `--env-file` ในการโหลดตัวแปรสภาพแวดล้อมโดยตรง ไม่ต้องพึ่งพาแพ็กเกจภายนอกอย่าง `dotenv`
 - **discord.js v14**: ไลบรารีทางการสำหรับเชื่อมต่อ Discord Gateway API
 - **Single-File Logic**: โค้ดการทำงานทั้งหมดอยู่ใน [index.js](file:///c:/Users/wpras/Desktop/Krai-ah-Bot/index.js) เพียงไฟล์เดียว
-- **Zero Database / Zero Overhead**: ไม่ใช้ Database, ไม่ใช้ ORM, ไม่ต้องมี Web Server, ไม่มี Service เสียเงิน
+- **Zero Database / Zero Overhead**: ไม่ใช้ Database หรือ ORM; บน Render จะเปิด HTTP endpoint ขนาดเล็กสำหรับตรวจสถานะ
 
 ```text
 Krai-ah/
@@ -139,6 +139,12 @@ npm start
 ```text
 Ready! Logged in as Krai-ah#7038
 ```
+
+### Run on Render Free
+
+Create a **Web Service** from this repository. Use `npm ci` as the build command and `node index.js` as the start command. Set `DISCORD_TOKEN` and `VOICE_LOG_CHANNEL_ID` in Render's environment settings; never commit `.env`. Render provides `PORT` automatically, and `/` returns `ok` when Discord is connected (HTTP 503 otherwise).
+
+Render Free web services sleep after 15 minutes without inbound requests. An external monitor must request the service URL regularly to keep the bot connected. Discord voice events cannot wake a sleeping web service, so events during sleep or restarts may be missed.
 
 ---
 

@@ -1,9 +1,9 @@
-# Krai-ah (ใครอ่ะ) — Minimal Discord Voice Join/Leave Logger
+# Pat (แพท) — Minimal Discord Voice Join/Leave Logger
 
 [![Node.js Version](https://img.shields.io/badge/node.js-v24%20LTS-green.svg)](https://nodejs.org/)
 [![discord.js](https://img.shields.io/badge/discord.js-v14-blue.svg)](https://discord.js.org/)
 
-**Krai-ah (ใครอ่ะ)** is a small Discord bot for logging when members join or leave voice channels.
+**Pat (แพท)** is a small Discord bot for logging when members join or leave voice channels.
 
 บอท Discord สำหรับใช้งานในเซิร์ฟเวอร์เดียว ส่งข้อความแจ้งสมาชิกเข้า–ออกห้องเสียงไปยังห้อง Log ที่กำหนด
 
@@ -60,7 +60,7 @@
 - **No Database**: ไม่ใช้ Database หรือ ORM; บน Render จะเปิด HTTP endpoint ขนาดเล็กสำหรับตรวจสถานะ
 
 ```text
-Krai-ah/
+Pat/
 ├── index.js          # Core logic (Discord client, voiceStateUpdate listener, logger)
 ├── .env              # Local environment variables (ignored by Git)
 ├── .env.example      # Template for environment variables
@@ -96,8 +96,8 @@ Krai-ah/
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/Title5656/Krai-ah.git
-cd Krai-ah
+git clone https://github.com/Title5656/Pat.git
+cd Pat
 ```
 
 ### 2. Configure Environment Variables (ตั้งค่าตัวแปรระบบ)
@@ -138,7 +138,7 @@ npm start
 เมื่อเชื่อมต่อสำเร็จ คอนโซลจะแสดงข้อความ:
 
 ```text
-Ready! Logged in as Krai-ah#7038
+Ready! Logged in as Pat
 ```
 
 ### Check and Test (ตรวจโค้ดและทดสอบ)
@@ -170,6 +170,8 @@ Create a **Web Service** from this repository. Use `npm ci` as the build command
 
 Render Free web services sleep after 15 minutes without inbound requests. An external monitor must request the service URL regularly to keep the bot connected. Discord voice events cannot wake a sleeping web service, so events during sleep or restarts may be missed.
 This repository includes a GitHub Actions ping every ten minutes. GitHub may delay or skip scheduled runs and automatically disables schedules in public repositories after 60 days without repository activity. Use a separate uptime monitor for longer-term service.
+
+Set the repository Actions variable `RENDER_SERVICE_URL` to the actual Render service URL under **Settings → Secrets and variables → Actions → Variables**. The keepalive workflow uses this URL; renaming the repository or bot does not automatically rename the Render service.
 
 ---
 

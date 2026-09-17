@@ -12,4 +12,12 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 3
     steps:
-      - run: curl -sS --max-time 120 -o /dev/null https://krai-ah-bot.onrender.com/
+      - name: Ping Pat on Render
+        env:
+          RENDER_SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+        run: |
+          if [ -z "$RENDER_SERVICE_URL" ]; then
+            echo "Set the RENDER_SERVICE_URL repository Actions variable to the Render service URL."
+            exit 1
+          fi
+          curl -sS --max-time 120 -o /dev/null "$RENDER_SERVICE_URL"

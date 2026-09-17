@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update bot branding, package metadata, and repository documentation to Pat (แพท).
+- Configure the Render keepalive URL through the `RENDER_SERVICE_URL` repository Actions variable.
 - Align package and lockfile metadata at version 0.1.0; keep dependency versions unchanged.
 - Declare Node.js 24 support and mark the bot package as private.
 - Check that the log channel is sendable and remove unreachable channel-name fallbacks.

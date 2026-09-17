@@ -3,8 +3,14 @@
   "version": "0.1.0",
   "description": "Minimal Discord Voice Join/Leave Logger",
   "main": "index.js",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
-    "start": "node --env-file=.env index.js"
+    "start": "node --env-file=.env index.js",
+    "check": "node --check index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "discord.js": "^14.18.0"

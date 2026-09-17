@@ -2,12 +2,10 @@
 
 [![Node.js Version](https://img.shields.io/badge/node.js-v24%20LTS-green.svg)](https://nodejs.org/)
 [![discord.js](https://img.shields.io/badge/discord.js-v14-blue.svg)](https://discord.js.org/)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
-[![Minimalist](https://img.shields.io/badge/architecture-minimalist-brightgreen.svg)]()
 
-**Krai-ah (ใครอ่ะ)** is a lightweight, zero-overhead Discord bot engineered for one dedicated purpose: logging when members join or leave voice channels without spam or clutter.
+**Krai-ah (ใครอ่ะ)** is a small Discord bot for logging when members join or leave voice channels.
 
-บอท Discord ขนาดเล็กที่สุด ออกแบบมาเพื่อตรวจจับและบันทึกข้อความเมื่อมีสมาชิกเข้าหรือออกจากห้อง Voice Channel โดยเฉพาะ รวดเร็ว สะอาดตา และไม่กินทรัพยากรเครื่อง
+บอท Discord สำหรับใช้งานในเซิร์ฟเวอร์เดียว ส่งข้อความแจ้งสมาชิกเข้า–ออกห้องเสียงไปยังห้อง Log ที่กำหนด
 
 ---
 
@@ -37,8 +35,8 @@
 - แยกข้อมูลออกเป็น 2 บรรทัดพร้อมระบุสถานะและผู้ใช้
 - ใช้ตัวคั่นช่องว่าง (`_ _`) ป้องกันไม่ให้ Discord รวมข้อความที่ส่งติดๆ กันเป็นก้อนเดียวที่อ่านยาก
 
-### 5. Crash Resilience (ทนทาน ไม่ดับง่าย)
-- ดักจับข้อผิดพลาด (Error Handling) รอบด้าน หากห้อง Log ถูกลบ หรือมีปัญหาเรื่อง Permission บอทจะแสดงข้อผิดพลาดในคอนโซลและทำงานต่อโดยไม่ Crash
+### 5. Voice Log Error Handling (จัดการข้อผิดพลาดในการส่ง Log)
+- หากค้นหาห้อง Log หรือส่งข้อความไม่สำเร็จ บอทจะบันทึกข้อผิดพลาดในคอนโซลและจบการจัดการเหตุการณ์นั้น โดยไม่ส่งข้อผิดพลาดออกจากตัวจัดการเหตุการณ์
 
 ---
 
@@ -57,9 +55,9 @@
 ## Architecture & Tech Stack (เทคโนโลยีและสถาปัตยกรรม)
 
 - **Node.js 24 LTS**: ใช้ความสามารถ Native `--env-file` ในการโหลดตัวแปรสภาพแวดล้อมโดยตรง ไม่ต้องพึ่งพาแพ็กเกจภายนอกอย่าง `dotenv`
-- **discord.js v14**: ไลบรารีทางการสำหรับเชื่อมต่อ Discord Gateway API
-- **Single-File Logic**: โค้ดการทำงานทั้งหมดอยู่ใน [index.js](file:///c:/Users/wpras/Desktop/Krai-ah-Bot/index.js) เพียงไฟล์เดียว
-- **Zero Database / Zero Overhead**: ไม่ใช้ Database หรือ ORM; บน Render จะเปิด HTTP endpoint ขนาดเล็กสำหรับตรวจสถานะ
+- **discord.js v14**: ไลบรารีสำหรับเชื่อมต่อ Discord API
+- **Single-File Logic**: โค้ดการทำงานทั้งหมดอยู่ใน [index.js](index.js) เพียงไฟล์เดียว
+- **No Database**: ไม่ใช้ Database หรือ ORM; บน Render จะเปิด HTTP endpoint ขนาดเล็กสำหรับตรวจสถานะ
 
 ```text
 Krai-ah/
@@ -68,6 +66,9 @@ Krai-ah/
 ├── .env.example      # Template for environment variables
 ├── .gitignore        # Excludes node_modules/ and .env
 ├── package.json      # Dependencies and start scripts
+├── package-lock.json # Locked dependency versions
+├── .node-version     # Node.js major version
+├── test/             # Voice event regression tests
 └── README.md         # Project documentation
 ```
 
@@ -125,7 +126,7 @@ VOICE_LOG_CHANNEL_ID=your_log_channel_id_here
 ### 3. Install Dependencies (ติดตั้งแพ็กเกจ)
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 4. Start the Bot (เปิดใช้งาน)
@@ -139,6 +140,29 @@ npm start
 ```text
 Ready! Logged in as Krai-ah#7038
 ```
+
+### Check and Test (ตรวจโค้ดและทดสอบ)
+
+```bash
+npm run check
+npm test
+```
+
+ชุดทดสอบใช้ Node.js test runner และจำลองการเชื่อมต่อ Discord โดยไม่อ่าน `.env` หรือส่งข้อความจริง ครอบคลุมการเข้า–ออกห้อง การกรองเหตุการณ์ ห้องที่ส่งข้อความไม่ได้ และข้อผิดพลาดจากการค้นหาห้องหรือส่งข้อความ
+
+GitHub Actions จะตรวจ syntax และรันชุดทดสอบเมื่อ push หรือเปิด pull request โดยไม่ต้องตั้งค่า Discord Token
+
+Workflow [Bot CI](.github/workflows/ci.yml) ใช้ Node.js ตาม `.node-version` ติดตั้ง dependency จาก lockfile ด้วย `npm ci` และหยุดเมื่อขั้นตอนใดล้มเหลว สามารถสั่งรันเองจากหน้า Actions ได้ หากมี commit ใหม่บนสาขาหรือ PR เดิม จะยกเลิกรอบเก่าที่ยังทำงานอยู่
+
+เพื่อป้องกันโค้ดที่ไม่ผ่านเข้า `main` ให้ตั้ง Branch Protection ใน GitHub หลัง workflow รันครั้งแรก:
+
+1. ไปที่ **Settings → Branches → Add branch protection rule** และระบุ `main`
+2. เปิด **Require a pull request before merging**
+3. เปิด **Require status checks to pass before merging** แล้วเลือก **Bot checks**
+4. เปิด **Require branches to be up to date before merging**
+5. เปิด **Do not allow bypassing the above settings** หากต้องการให้กฎใช้กับผู้ดูแลด้วย
+
+CI ที่รันหลัง push เข้า `main` ไม่ย้อนกลับ commit ที่ push ไปแล้ว การป้องกันก่อนเข้า `main` ต้องใช้ PR ร่วมกับกฎข้างต้น และชุดทดสอบจำลอง Discord จึงไม่ได้ยืนยันว่าสิทธิ์หรือ Token ของระบบจริงถูกต้อง
 
 ### Run on Render Free
 

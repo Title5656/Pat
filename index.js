@@ -53,16 +53,16 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       return null;
     });
 
-    if (!channel || !channel.isTextBased()) {
+    if (!channel || !channel.isSendable()) {
       console.error(`Log channel (${logChannelId}) not found or cannot receive text messages.`);
       return;
     }
 
     if (isJoin) {
-      const channelTag = newState.channelId ? `<#${newState.channelId}>` : (newState.channel?.name ?? 'Unknown');
+      const channelTag = `<#${newState.channelId}>`;
       await channel.send(`> 🟢 **เข้าห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
     } else if (isLeave) {
-      const channelTag = oldState.channelId ? `<#${oldState.channelId}>` : (oldState.channel?.name ?? 'Unknown');
+      const channelTag = `<#${oldState.channelId}>`;
       await channel.send(`> 🔴 **ออกจากห้อง:** ${channelTag}\n> 👤 <@${member.id}>\n_ _`);
     }
   } catch (err) {

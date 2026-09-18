@@ -37,8 +37,17 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
   const isJoin = oldState.channelId === null && newState.channelId !== null;
   const isLeave = oldState.channelId !== null && newState.channelId === null;
+  const isMove = oldState.channelId !== null && newState.channelId !== null
+    && oldState.channelId !== newState.channelId;
+  const hasChannel = oldState.channelId !== null || newState.channelId !== null;
+  const muteChanged = hasChannel && typeof oldState.selfMute === 'boolean'
+    && typeof newState.selfMute === 'boolean' && oldState.selfMute !== newState.selfMute;
+  const deafChanged = hasChannel && typeof oldState.selfDeaf === 'boolean'
+    && typeof newState.selfDeaf === 'boolean' && oldState.selfDeaf !== newState.selfDeaf;
+  const streamChanged = hasChannel && typeof oldState.streaming === 'boolean'
+    && typeof newState.streaming === 'boolean' && oldState.streaming !== newState.streaming;
 
-  if (!isJoin && !isLeave) {
+  if (!isJoin && !isLeave && !isMove && !muteChanged && !deafChanged && !streamChanged) {
     return;
   }
 
@@ -58,18 +67,33 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       return;
     }
 
-    if (isJoin) {
-      const channelTag = `<#${newState.channelId}>`;
-      await channel.send({
-        content: `> 🟢 **เข้าห้อง:** ${channelTag}\n> 👤 ${member.displayName}\n_ _`,
-        allowedMentions: { parse: [] },
-      });
-    } else if (isLeave) {
-      const channelTag = `<#${oldState.channelId}>`;
-      await channel.send({
-        content: `> 🔴 **ออกจากห้อง:** ${channelTag}\n> 👤 ${member.displayName}\n_ _`,
-        allowedMentions: { parse: [] },
-      });
+    const time = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).format(new Date());
+    const oldChannel = oldState.channel?.name ?? oldState.channelId;
+    const newChannel = newState.channel?.name ?? newState.channelId;
+    const voiceChannel = newChannel ?? oldChannel;
+    const user = `> 👤 **User:** ${member.displayName}`;
+    const timestamp = `> 🕒 **Time:** ${time}`;
+    const logs = [];
+
+    if (isJoin) logs.push(['🟢 Voice Joined', 0x57F287, [user, `> 🔊 **Channel:** \`${newChannel}\``, timestamp]]);
+    if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🔊 **Channel:** \`${oldChannel}\``, '> ⏱️ **Duration:** Coming soon', timestamp]]);
+    if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 📤 **From:** \`${oldChannel}\``, `> 📥 **To:** \`${newChannel}\``, timestamp]]);
+    if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\``, timestamp]]);
+    if (deafChanged) logs.push(['🎧 Deafen Changed', 0x9B59B6, [user, `> 🎧 **Status:** ${newState.selfDeaf ? 'Deafened 🔇' : 'Undeafened 🎧'}`, `> 🔊 **Channel:** \`${voiceChannel}\``, timestamp]]);
+    if (streamChanged) {
+      const started = newState.streaming;
+      logs.push([started ? '📺 Stream Started' : '📺 Stream Stopped', started ? 0x1ABC9C : 0x95A5A6,
+        [user, `> 🔊 **Channel:** \`${voiceChannel}\``, started ? '> 📡 **Status:** Streaming' : '> ⏱️ **Stream Duration:** Coming soon', timestamp]]);
+    }
+
+    for (const [title, color, lines] of logs) {
+      try {
+        await channel.send({ embeds: [{ title, color, description: lines.join('\n') }], allowedMentions: { parse: [] } });
+      } catch (err) {
+        console.error('Error handling voice log event:', err.message);
+      }
     }
   } catch (err) {
     console.error('Error handling voice log event:', err.message);

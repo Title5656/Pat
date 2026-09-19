@@ -69,4 +69,3 @@
 - [ ] อธิบายการเปิด Message Content Intent และการจำกัดห้องใน README
 - [ ] อัปเดต changelog ให้ตรงกับพฤติกรรมข้อความปกติ
 - [ ] รัน `npm run check && npm test` และยืนยันว่าออกด้วยรหัส 0
-

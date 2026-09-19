@@ -44,4 +44,3 @@ Pat ใช้ภาษาไทยเป็นหลัก ตอบกระช
 ## Testing
 
 ใช้ `node:test` ทดสอบการกรองห้องและบัญชีบอท, typing, Gemini success/failure, response limit, memory isolation, concurrent messages, intent wiring และ voice logger regression โดยไม่เชื่อม Discord หรือ Gemini จริง
-

@@ -5,16 +5,21 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl } = {}) {
   const messages = [];
   const errors = [];
   const listeners = new Map();
   let clientOptions;
+  let createdClient;
+  const researchClients = [];
+  let loginCount = 0;
+  const signals = new Map();
+  const shutdownState = { deadlineCleared: false, exitCode: null };
   let httpHandler;
   let fetchCount = 0;
   const fetchedChannelIds = [];
   class Client {
-    constructor(options) { clientOptions = options; }
+    constructor(options) { clientOptions = options; createdClient = this; }
     application = { commands: {} };
     channels = {
       fetch: async (id) => {
@@ -35,13 +40,15 @@ function setup({ sendable = true, fetchError, sendError, port } = {}) {
     once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
     isReady() { return false; }
-    login() { return Promise.resolve(); }
+    login() { loginCount++; return Promise.resolve(); }
+    async destroy() { await destroyImpl?.(); }
   }
   vm.runInNewContext(source, {
     require: (id) => {
       if (id === 'discord.js') {
         return {
           Client,
+          Partials: { Message: 'partial-message', Channel: 'partial-channel' },
           GatewayIntentBits: {
             Guilds: 1,
             GuildVoiceStates: 2,
@@ -65,6 +72,13 @@ function setup({ sendable = true, fetchError, sendError, port } = {}) {
       if (id === './src/chat/handle-message') {
         return { createMessageHandler: () => async () => {} };
       }
+      if (id === './src/research/feature') {
+        return { startResearch: async ({ client }) => {
+          researchClients.push(client);
+          if (researchStartError) throw researchStartError;
+          return { stop: async () => {} };
+        } };
+      }
       if (id === 'node:http') {
         return { createServer: (handler) => {
           httpHandler = handler;
@@ -74,6 +88,8 @@ function setup({ sendable = true, fetchError, sendError, port } = {}) {
       throw new Error(`Unexpected require: ${id}`);
     },
     process: {
+      once(signal, listener) { signals.set(signal, listener); },
+      exit(code) { shutdownState.exitCode = code; },
       env: {
         DISCORD_TOKEN: 'test-token',
         PAT_CHAT_CHANNEL_ID: 'chat-room',
@@ -81,13 +97,21 @@ function setup({ sendable = true, fetchError, sendError, port } = {}) {
         GEMINI_API_KEY: 'key',
         GEMINI_MODEL: 'model',
         PORT: port,
+        PAT_RESEARCH_CHANNEL_ID: researchChannelId,
       },
     },
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
+    setTimeout: () => ({ unref() {} }),
+    clearTimeout: () => { shutdownState.deadlineCleared = true; },
     console: { log() {}, error: (...args) => errors.push(args.join(' ')) },
   });
   return {
     messages, errors, fetchedChannelIds,
+    researchClients,
+    shutdownState,
+    emitSignal: signal => signals.get(signal)(),
+    get createdClient() { return createdClient; },
+    get loginCount() { return loginCount; },
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
     emitReady: () => listeners.get('ready')({
@@ -253,4 +277,36 @@ test('serves Render health checks at /health', () => {
   assert.equal(response.status, 200);
   assert.equal(response.headers['content-type'], 'text/plain');
   assert.equal(response.body, 'ok');
+});
+
+test('research attaches to the same Pat connection only after Discord is ready', async () => {
+  const app = setup({ researchChannelId: 'research-room' });
+  assert.equal(app.researchClients.length, 0);
+  await app.emitReady();
+  assert.deepEqual(app.researchClients, [app.createdClient]);
+  assert.equal(app.loginCount, 1);
+  assert.deepEqual(Array.from(app.clientOptions.partials), ['partial-message', 'partial-channel']);
+});
+
+test('failed research initialization leaves original voice and chat listeners working', async () => {
+  const app = setup({ researchChannelId: 'research-room', researchStartError: new Error('bad research config') });
+  await app.emitReady();
+  assert.match(app.errors.join('\n'), /research/i);
+  assert.equal(app.hasListener('message'), true);
+  await app.emit(state(null), state('voice'));
+  assert.equal(app.messages.length, 1);
+});
+
+test('shutdown retains its deadline until the shared Discord client has disconnected', async () => {
+  let finishDisconnect;
+  const disconnect = new Promise(resolve => { finishDisconnect = resolve; });
+  const app = setup({ researchChannelId: 'research-room', destroyImpl: () => disconnect });
+  await app.emitReady();
+  app.emitSignal('SIGTERM');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.shutdownState.deadlineCleared, false);
+  assert.equal(app.shutdownState.exitCode, null);
+  finishDisconnect();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.shutdownState.exitCode, 0);
 });

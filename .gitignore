@@ -3,3 +3,8 @@ node_modules/
 ssh/
 floral-dream-b933.cloudflareaccess..txt
 .worktrees/
+.npm-cache/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

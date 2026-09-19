@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Events, Partials } = require('discord.js');
 const { createMemory } = require('./src/chat/memory');
 const { createConversation } = require('./src/chat/conversation');
 const { createGeminiGenerator } = require('./src/chat/gemini-client');
@@ -27,6 +27,7 @@ if (!geminiApiKey) {
 }
 
 const client = new Client({
+  partials: [Partials.Message, Partials.Channel],
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
@@ -42,8 +43,9 @@ const generate = geminiApiKey
 const conversation = createConversation({ generate, memory });
 const messageHandler = createMessageHandler({ chatChannelId, conversation });
 
+let healthServer;
 if (process.env.PORT) {
-  require('node:http').createServer((req, res) => {
+  healthServer = require('node:http').createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end('ok');
@@ -54,8 +56,35 @@ if (process.env.PORT) {
   }).listen(process.env.PORT, '0.0.0.0');
 }
 
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+  if (!process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) return;
+  try {
+    const research = await require('./src/research/feature').startResearch({ client });
+    let stopping = false;
+    const shutdown = async () => {
+      if (stopping) return;
+      stopping = true;
+      const deadline = setTimeout(() => process.exit(1), 20000);
+      deadline.unref();
+      try {
+        await research.stop();
+        await client.destroy();
+        if (healthServer) await new Promise(resolve => healthServer.close(resolve));
+        clearTimeout(deadline);
+        process.exit(0);
+      } catch (error) {
+        console.error(`Pat shutdown failed; code=${error.code ?? error.name ?? 'unknown'}`);
+        process.exit(1);
+      }
+    };
+    process.once('SIGINT', () => { void shutdown(); });
+    process.once('SIGTERM', () => { void shutdown(); });
+  } catch (error) {
+    const reason = /^(?:(?:Missing|Invalid) (?:PAT_RESEARCH_[A-Z_]+|GEMINI_API_KEY)(?:$|:)|PAT_RESEARCH_[A-Z_]+ )/.test(error.message)
+      ? error.message : (error.code ?? error.name ?? 'unknown');
+    console.error(`Pat research could not start: ${reason}. Existing chat and voice logging remain active.`);
+  }
 });
 
 client.on(Events.MessageCreate, messageHandler);

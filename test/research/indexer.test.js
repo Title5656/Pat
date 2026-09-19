@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createStore } = require('../src/store');
-const { createIndexer } = require('../src/indexer');
+const { createStore } = require('../../src/research/store');
+const { createIndexer } = require('../../src/research/indexer');
 
 const record = id => ({ id: String(id), channelId: '20', guildId: '10', guildName: 'Guild', channelName: 'general', authorId: '30', authorName: 'Alice', content: `evidence ${id}`, createdAt: 1700000000000 });
 function fixture(store, ids) {

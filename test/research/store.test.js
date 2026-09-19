@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { createStore } = require('../src/store');
+const { createStore } = require('../../src/research/store');
 
 const record = (id, content) => ({ id, channelId: '20', guildId: '10', guildName: 'Friends', channelName: 'general', authorName: 'Somchai', authorId: '30', content, createdAt: 1700000000000 });
 

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createGeminiModel } = require('../src/gemini');
+const { createGeminiModel } = require('../../src/research/gemini');
 
 test('search planning returns bounded queries and source text is data under a separate persona', async () => {
   const requests = [];

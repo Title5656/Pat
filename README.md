@@ -7,7 +7,8 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 ## การทำงานหลัก
 
 - พิมพ์คุยหรือส่งรูปขนาดไม่เกิน 10 MB ให้แพทวิเคราะห์ได้ในห้องที่กำหนดด้วย `PAT_CHAT_CHANNEL_ID`
-- ละเว้นข้อความจากห้องอื่น บัญชีบอท และข้อความเปล่าที่ไม่มีรูป
+- เปิดห้องค้นข้อมูลเพิ่มด้วย `PAT_RESEARCH_CHANNEL_ID`: Pat ตัวเดิมใช้ persona ตอบตามหลักฐาน ค้นข้อความข้ามเซิร์ฟเวอร์ พร้อมลิงก์ต้นทาง
+- ห้องคุยเดิมและห้องค้นข้อมูลแยก persona และความจำกัน; ไม่ตอบข้อความในห้องอื่นหรือจากบัญชีบอท
 - จำบทสนทนา 12 ข้อความล่าสุดแยกตามห้องระหว่างที่โปรเซสทำงาน
 - ตอบด้วยภาษาไทยและคงคาแรกเตอร์เอ๋อแบบน่ารัก โดยยังรักษาความถูกต้องของสาระหลัก
 - แสดงสาเหตุจาก Gemini ต่อท้าย fallback โดยปิดบัง key และ token ก่อนส่งเข้า Discord
@@ -25,20 +26,32 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 
 - `DISCORD_TOKEN` — token ของ Discord bot
 - `VOICE_LOG_CHANNEL_ID` — ID ของช่องในเซิร์ฟเวอร์หลักสำหรับรวม voice log จากทุกเซิร์ฟเวอร์ บอทต้องเข้าถึงช่องและมีสิทธิ์ส่งข้อความและ Embed
-- `PAT_CHAT_CHANNEL_ID` — ID ของห้องเดียวที่แพทจะอ่านและตอบข้อความ
+- `PAT_CHAT_CHANNEL_ID` — ID ของห้องคุยกับ persona เดิมของแพท
 - `GEMINI_API_KEY` — API key จาก Google AI Studio
 - `GEMINI_MODEL` — โมเดล Gemini เช่น `gemini-flash-latest`
 
 เปิด **Message Content Intent** ใน Discord Developer Portal แล้วเริ่มบอทด้วย `npm start` สมาชิกสามารถพิมพ์คุยกับแพทได้ทันทีในห้องที่กำหนด
 
+หากต้องการเปิดฟีเจอร์ค้นข้อมูล ให้เพิ่มสองค่าใน `.env` เดิมหรือ Environment ของ Render service เดิม:
+
+```dotenv
+PAT_RESEARCH_CHANNEL_ID=ใส่_ID_ห้องค้นข้อมูล
+PAT_RESEARCH_ALLOWED_USER_IDS=ใส่_USER_ID_ที่อนุญาต
+```
+
+ห้องค้นข้อมูลต้องเป็น private และคนละห้องกับ `PAT_CHAT_CHANNEL_ID` อนุญาตสมาชิกเป็นรายคนตาม allowlist ใช้ `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GEMINI_MODEL` และ service เดิมทั้งหมด ไม่ต้องสร้าง Discord Application ใหม่ ไม่ต้องใช้ค่า `RESEARCH_DISCORD_TOKEN`, `RESEARCH_APPLICATION_ID` หรือ `RESEARCH_GEMINI_API_KEY` แล้ว หากเว้น `PAT_RESEARCH_CHANNEL_ID` ว่าง ฟีเจอร์นี้จะปิดและ Pat ทำงานตามเดิม
+
+บน Render ใช้ root directory ของ repo เดิม, build `npm ci`, start `npm start`, Node 24 และ health path `/health` หากต้องการเก็บดัชนีข้าม redeploy ให้แนบ persistent disk แล้วตั้ง `PAT_RESEARCH_DATABASE_PATH=/var/data/research.sqlite` ดู [วิธีตั้งห้องและขอบเขตการค้น](docs/research.md)
+
 ## เทคโนโลยีและโครงสร้าง
 
-ใช้ Node.js 24, discord.js v14 และ Google Gen AI SDK ไม่มีฐานข้อมูล และความจำบทสนทนาจะหายเมื่อโปรเซสรีสตาร์ต
+ใช้ Node.js 24, discord.js v14 และ Google Gen AI SDK ความจำบทสนทนาจะหายเมื่อโปรเซสรีสตาร์ต ส่วนฟีเจอร์ค้นข้อมูลใช้ SQLite เก็บดัชนีข้อความใน `data/research.sqlite` หรือ path ที่กำหนดบน persistent disk
 
 ```text
 Pat/
 ├── index.js                 # เชื่อมต่อ Discord และประกอบระบบต่าง ๆ
 ├── src/chat/                # คำสั่ง คาแรกเตอร์ memory และ Gemini adapter
+├── src/research/            # ฟีเจอร์ค้นข้อความ ใช้ Discord client และ Gemini key เดิม
 ├── test/                    # ทดสอบ voice logger และระบบแชต
 ├── .github/workflows/      # งานอัตโนมัติ รวมถึง CI ตรวจโค้ดและเทสต์
 ├── .env.example            # ตัวอย่างตัวแปรตั้งค่า

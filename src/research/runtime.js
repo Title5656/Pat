@@ -1,6 +1,4 @@
-const { once } = require('node:events');
 const { Events, ChannelType, PermissionFlagsBits: P } = require('discord.js');
-const { validateIdentity } = require('./config');
 const { createDiscordSource } = require('./discord-source');
 const { createIndexer } = require('./indexer');
 const { createAssistant } = require('./assistant');
@@ -19,23 +17,23 @@ function createRuntime({ client, store, model, config, logger = console,
     const channel = await client.channels.fetch(config.qaChannelId, { force: true });
     if (!channel?.guild || channel.type !== ChannelType.GuildText
       || !channel.permissionsFor(channel.guild.members.me)?.has([P.ViewChannel, P.SendMessages, P.ReadMessageHistory])) {
-      throw new Error('RESEARCH_QA_CHANNEL_ID must be a guild text channel the new bot can read and write');
+      throw new Error('PAT_RESEARCH_CHANNEL_ID must be a guild text channel Pat can read and write');
     }
     await channel.guild.roles.fetch();
     if (channel.permissionsFor(channel.guild.roles.everyone)?.has(P.ViewChannel)) {
-      throw new Error('RESEARCH_QA_CHANNEL_ID must be private: deny View Channel for @everyone');
+      throw new Error('PAT_RESEARCH_CHANNEL_ID must be private: deny View Channel for @everyone');
     }
     for (const role of channel.guild.roles.cache.values()) {
       // Server administrators bypass channel permissions by Discord design.
-      if (role.permissions.has(P.Administrator) || role.tags?.botId === config.applicationId) continue;
+      if (role.permissions.has(P.Administrator) || role.tags?.botId === client.user.id) continue;
       if (channel.permissionsFor(role)?.has(P.ViewChannel)) {
-        throw new Error('RESEARCH_QA_CHANNEL_ID must grant visibility to trusted users directly, not shared roles');
+        throw new Error('PAT_RESEARCH_CHANNEL_ID must grant visibility to trusted users directly, not shared roles');
       }
     }
     for (const overwrite of channel.permissionOverwrites.cache.values()) {
       if (overwrite.type === 1 && overwrite.allow.has(P.ViewChannel)
-        && overwrite.id !== config.applicationId && !config.allowedUserIds.has(overwrite.id)) {
-        throw new Error('RESEARCH_QA_CHANNEL_ID has a visibility grant for a non-trusted user');
+        && overwrite.id !== client.user.id && !config.allowedUserIds.has(overwrite.id)) {
+        throw new Error('PAT_RESEARCH_CHANNEL_ID has a visibility grant for a non-trusted user');
       }
     }
   }
@@ -84,15 +82,10 @@ function createRuntime({ client, store, model, config, logger = console,
 
   return {
     async start() {
-      const ready = once(client, Events.ClientReady);
-      // Attach a rejection handler even if login fails before the ready event.
-      void ready.catch(() => {});
-      await client.login(config.token);
-      await ready;
-      validateIdentity(client.user.id, config.applicationId);
+      if (!client.isReady()) throw new Error('Pat must be connected before starting research');
       await checkOutput();
       active = true;
-      logger.log('Research bot connected; background history indexing started.');
+      logger.log('Pat research enabled; background history indexing started.');
       void tick();
     },
     status() { return { ready: active && (client.isReady?.() ?? true), ...indexer.status() }; },
@@ -104,7 +97,6 @@ function createRuntime({ client, store, model, config, logger = console,
       stopping = (async () => {
         await Promise.all([assistant.stop(), indexer.stop()]);
         await Promise.allSettled([...jobs]);
-        await client.destroy();
         store.close();
       })();
       return stopping;

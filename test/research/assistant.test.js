@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createStore } = require('../src/store');
-const { createAssistant } = require('../src/assistant');
+const { createStore } = require('../../src/research/store');
+const { createAssistant } = require('../../src/research/assistant');
 
 const evidence = { id: '100', guildId: '10', channelId: '20', guildName: 'Friends', channelName: 'food', authorName: 'Alice', authorId: '30', content: 'กินหมูกระทะวันศุกร์', createdAt: 1700000000000 };
 function fixture(overrides = {}) {

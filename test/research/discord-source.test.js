@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { PermissionFlagsBits: P, PermissionsBitField, ChannelType } = require('discord.js');
-const { createDiscordSource } = require('../src/discord-source');
+const { createDiscordSource } = require('../../src/research/discord-source');
 
 function fixture() {
   const guild = { id: '10', name: 'Friends', members: { me: { id: 'bot' } } };

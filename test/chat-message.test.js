@@ -79,10 +79,32 @@ test('uses a friendly fallback when Gemini fails', async () => {
   await handler(message);
 
   assert.deepEqual(message.calls.at(-1), ['send', {
-    content: 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠',
+    content: 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠\nGemini error: offline',
     allowedMentions: { parse: [] },
   }]);
   assert.equal(errors.length, 1);
+});
+
+test('redacts credentials and limits the public Gemini error', async () => {
+  const message = createMessage();
+  const fakeApiKey = `AQ.${'A'.repeat(40)}`;
+  const handler = createMessageHandler({
+    chatChannelId: 'chat-room',
+    conversation: {
+      reply: async () => {
+        throw new Error(`request failed key=${fakeApiKey} ${'x'.repeat(600)}`);
+      },
+    },
+    logger: { error() {} },
+  });
+
+  await handler(message);
+
+  const content = message.calls.at(-1)[1].content;
+  const publicError = content.split('Gemini error: ')[1];
+  assert.equal(content.includes(fakeApiKey), false);
+  assert.match(content, /key=\[REDACTED\]/);
+  assert.equal(publicError.length, 500);
 });
 
 test('truncates Gemini responses to the Discord message limit', async () => {

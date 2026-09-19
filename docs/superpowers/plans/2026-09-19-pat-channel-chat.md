@@ -31,7 +31,7 @@
 - Consumes: `conversation.reply({ channelId, userName, text }): Promise<string>`
 - Produces: `createMessageHandler({ chatChannelId, conversation, logger }): (message) => Promise<void>`
 
-- [ ] เขียน failing tests สำหรับข้อความในห้องที่กำหนด ห้องอื่น บัญชีบอท ข้อความว่าง Gemini failure และคำตอบเกินขีดจำกัด
+- [ ] เขียน failing tests สำหรับข้อความในห้องที่กำหนด ห้องอื่น บัญชีบอท ข้อความว่าง Gemini failure การปิดบัง credentials และคำตอบเกินขีดจำกัด
 - [ ] รัน `node --test test/chat-message.test.js` และยืนยันว่า fail เพราะยังไม่มี module
 - [ ] สร้าง handler ที่กรองข้อความ เรียก `sendTyping()` และส่ง `{ content, allowedMentions: { parse: [] } }`
 - [ ] รัน focused tests และยืนยันว่า 4 tests ผ่าน

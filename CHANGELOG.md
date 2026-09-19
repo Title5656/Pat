@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show a sanitized Gemini error with fallback replies while keeping full errors in server logs.
+- Report Gemini safety blocks explicitly and redact credentials from public error details.
 - Add a Gemini-backed chat channel where Pat answers normal messages with a Thai character prompt.
 - Restrict chat responses to `PAT_CHAT_CHANNEL_ID` and ignore other channels and bot messages.
 - Keep the latest 12 conversation messages in memory per Discord channel.

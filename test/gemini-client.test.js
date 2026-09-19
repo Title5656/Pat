@@ -55,3 +55,23 @@ test('rejects an empty Gemini response', async () => {
     message: 'Gemini returned an empty response.',
   });
 });
+
+test('reports the Gemini safety reason when a response is blocked', async () => {
+  class FakeGoogleGenAI {
+    models = {
+      generateContent: async () => ({
+        text: '',
+        promptFeedback: { blockReason: 'SAFETY' },
+      }),
+    };
+  }
+  const generate = createGeminiGenerator({
+    apiKey: 'key',
+    model: 'configured-model',
+    GoogleGenAIClass: FakeGoogleGenAI,
+  });
+
+  await assert.rejects(() => generate({ instructions: 'persona', input: [] }), {
+    message: 'Gemini blocked the prompt: SAFETY.',
+  });
+});

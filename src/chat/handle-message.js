@@ -1,4 +1,13 @@
 const FAILURE_REPLY = 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠';
+const MAX_PUBLIC_ERROR_LENGTH = 500;
+
+function publicGeminiError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/(?:AIza[A-Za-z0-9_-]{20,}|AQ\.[A-Za-z0-9_-]{20,})/g, '[REDACTED]')
+    .replace(/((?:api[_ -]?key|key|token)\s*[=:]\s*)[^\s&]+/gi, '$1[REDACTED]')
+    .slice(0, MAX_PUBLIC_ERROR_LENGTH);
+}
 
 function replyOptions(content) {
   return {
@@ -29,8 +38,10 @@ function createMessageHandler({ chatChannelId, conversation, logger = console })
       });
       await message.channel.send(replyOptions(answer));
     } catch (error) {
-      logger.error('Failed to answer chat message:', error.message);
-      await message.channel.send(replyOptions(FAILURE_REPLY));
+      logger.error('Failed to answer chat message:', error);
+      await message.channel.send(replyOptions(
+        `${FAILURE_REPLY}\nGemini error: ${publicGeminiError(error)}`,
+      ));
     }
   };
 }

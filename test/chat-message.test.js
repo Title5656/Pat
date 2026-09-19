@@ -6,6 +6,7 @@ function createMessage({
   channelId = 'chat-room',
   content = 'หวัดดีแพท',
   bot = false,
+  sendError,
 } = {}) {
   const calls = [];
   return {
@@ -15,7 +16,10 @@ function createMessage({
     member: { displayName: 'คุณมิน' },
     channel: {
       sendTyping: async () => calls.push(['typing']),
-      send: async (value) => calls.push(['send', value]),
+      send: async (value) => {
+        calls.push(['send', value]);
+        if (sendError) throw sendError;
+      },
     },
     calls,
   };
@@ -79,10 +83,43 @@ test('uses a friendly fallback when Gemini fails', async () => {
   await handler(message);
 
   assert.deepEqual(message.calls.at(-1), ['send', {
-    content: 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠',
+    content: 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠\nGemini error: offline',
     allowedMentions: { parse: [] },
   }]);
   assert.equal(errors.length, 1);
+});
+
+test('redacts credentials and limits the public Gemini error', async () => {
+  const message = createMessage();
+  const fakeApiKey = `AQ.${'A'.repeat(40)}`;
+  const bearerToken = 'ya29.private-bearer-token';
+  const jsonApiKey = 'private-json-key';
+  const quotedToken = 'private-quoted-token';
+  const handler = createMessageHandler({
+    chatChannelId: 'chat-room',
+    conversation: {
+      reply: async () => {
+        throw new Error(
+          `request failed key=${fakeApiKey} Authorization: Bearer ${bearerToken} `
+          + `{"apiKey":"${jsonApiKey}"} token "${quotedToken}" ${'x'.repeat(600)}`,
+        );
+      },
+    },
+    logger: { error() {} },
+  });
+
+  await handler(message);
+
+  const content = message.calls.at(-1)[1].content;
+  const publicError = content.split('Gemini error: ')[1];
+  for (const credential of [fakeApiKey, bearerToken, jsonApiKey, quotedToken]) {
+    assert.equal(content.includes(credential), false);
+  }
+  assert.match(content, /key=\[REDACTED\]/);
+  assert.match(content, /Bearer \[REDACTED\]/);
+  assert.match(content, /"apiKey":\s*"?\[REDACTED\]"?/);
+  assert.match(content, /token "\[REDACTED\]"/);
+  assert.equal(publicError.length, 500);
 });
 
 test('truncates Gemini responses to the Discord message limit', async () => {
@@ -96,4 +133,23 @@ test('truncates Gemini responses to the Discord message limit', async () => {
   await handler(message);
 
   assert.equal(message.calls.at(-1)[1].content.length, 2000);
+});
+
+test('logs Discord send failures without relabeling them as Gemini errors', async () => {
+  const message = createMessage({
+    sendError: new Error('Discord REST route /channels/123/messages failed'),
+  });
+  const errors = [];
+  const handler = createMessageHandler({
+    chatChannelId: 'chat-room',
+    conversation: { reply: async () => 'Gemini answered successfully' },
+    logger: { error: (...args) => errors.push(args) },
+  });
+
+  await handler(message);
+
+  const sends = message.calls.filter(([name]) => name === 'send');
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0][1].content, 'Gemini answered successfully');
+  assert.match(errors[0][0], /Failed to send chat message/);
 });

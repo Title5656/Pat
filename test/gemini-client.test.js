@@ -95,3 +95,35 @@ test('rejects partial text when Gemini finishes for safety', async () => {
     message: 'Gemini did not return a complete response (finish reason: SAFETY).',
   });
 });
+
+for (const finishReason of [
+  'RECITATION',
+  'LANGUAGE',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'IMAGE_SAFETY',
+  'IMAGE_PROHIBITED_CONTENT',
+  'IMAGE_RECITATION',
+  'IMAGE_OTHER',
+]) {
+  test(`rejects partial text when Gemini finishes for ${finishReason}`, async () => {
+    class FakeGoogleGenAI {
+      models = {
+        generateContent: async () => ({
+          text: 'partial text that must not be posted',
+          candidates: [{ finishReason }],
+        }),
+      };
+    }
+    const generate = createGeminiGenerator({
+      apiKey: 'key',
+      model: 'configured-model',
+      GoogleGenAIClass: FakeGoogleGenAI,
+    });
+
+    await assert.rejects(() => generate({ instructions: 'persona', input: [] }), {
+      message: `Gemini did not return a complete response (finish reason: ${finishReason}).`,
+    });
+  });
+}

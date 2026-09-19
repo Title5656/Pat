@@ -32,20 +32,31 @@ function createMessageHandler({ chatChannelId, conversation, logger = console })
 
     await message.channel.sendTyping().catch(() => {});
 
+    let answer;
     try {
-      const answer = await conversation.reply({
+      answer = await conversation.reply({
         channelId: message.channelId,
         userName: message.member?.displayName
           ?? message.author.globalName
           ?? message.author.username,
         text: message.content.trim(),
       });
-      await message.channel.send(replyOptions(answer));
     } catch (error) {
       logger.error('Failed to answer chat message:', error);
-      await message.channel.send(replyOptions(
-        `${FAILURE_REPLY}\nGemini error: ${publicGeminiError(error)}`,
-      ));
+      try {
+        await message.channel.send(replyOptions(
+          `${FAILURE_REPLY}\nGemini error: ${publicGeminiError(error)}`,
+        ));
+      } catch (sendError) {
+        logger.error('Failed to send Gemini error reply:', sendError);
+      }
+      return;
+    }
+
+    try {
+      await message.channel.send(replyOptions(answer));
+    } catch (error) {
+      logger.error('Failed to send chat message:', error);
     }
   };
 }

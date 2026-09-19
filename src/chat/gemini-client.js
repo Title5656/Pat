@@ -18,7 +18,7 @@ function createGeminiGenerator({ apiKey, model, GoogleGenAIClass = GoogleGenAI }
       throw new Error(`Gemini blocked the prompt: ${blockReason}.`);
     }
     const finishReason = response.candidates?.[0]?.finishReason;
-    if (finishReason === 'SAFETY') {
+    if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
       throw new Error(`Gemini did not return a complete response (finish reason: ${finishReason}).`);
     }
     if (!response.text) {

@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Integrate cross-server research as a second room on the existing Pat bot, sharing its Discord connection, Gemini key, and deployment while keeping persona and question memory separate.
-- Add optional `PAT_RESEARCH_CHANNEL_ID` and `PAT_RESEARCH_ALLOWED_USER_IDS`, persistent SQLite search, live source verification, and cited answers.
+- Add optional `PAT_RESEARCH_CHANNEL_ID`, persistent SQLite search, live source verification, and cited answers; access follows the private Discord channel permissions.
 - Remove the separate research-bot application and deployment setup; preserve existing chat/image and voice-log behavior when research is disabled or fails to initialize.
 
 - Show a sanitized Gemini error with fallback replies while keeping full errors in server logs.

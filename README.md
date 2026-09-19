@@ -36,10 +36,9 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 
 ```dotenv
 PAT_RESEARCH_CHANNEL_ID=ใส่_ID_ห้องค้นข้อมูล
-PAT_RESEARCH_ALLOWED_USER_IDS=ใส่_USER_ID_ที่อนุญาต
 ```
 
-ห้องค้นข้อมูลต้องเป็น private และคนละห้องกับ `PAT_CHAT_CHANNEL_ID` อนุญาตสมาชิกเป็นรายคนตาม allowlist ใช้ `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GEMINI_MODEL` และ service เดิมทั้งหมด ไม่ต้องสร้าง Discord Application ใหม่ ไม่ต้องใช้ค่า `RESEARCH_DISCORD_TOKEN`, `RESEARCH_APPLICATION_ID` หรือ `RESEARCH_GEMINI_API_KEY` แล้ว หากเว้น `PAT_RESEARCH_CHANNEL_ID` ว่าง ฟีเจอร์นี้จะปิดและ Pat ทำงานตามเดิม
+ห้องค้นข้อมูลต้องเป็น private และคนละห้องกับ `PAT_CHAT_CHANNEL_ID` สมาชิกทุกคนที่ Discord อนุญาตให้เห็นห้องสามารถถามได้ ใช้ `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GEMINI_MODEL` และ service เดิมทั้งหมด ไม่ต้องสร้าง Discord Application ใหม่ ไม่ต้องใช้ค่า `RESEARCH_DISCORD_TOKEN`, `RESEARCH_APPLICATION_ID` หรือ `RESEARCH_GEMINI_API_KEY` แล้ว หากเว้น `PAT_RESEARCH_CHANNEL_ID` ว่าง ฟีเจอร์นี้จะปิดและ Pat ทำงานตามเดิม
 
 บน Render ใช้ root directory ของ repo เดิม, build `npm ci`, start `npm start`, Node 24 และ health path `/health` หากต้องการเก็บดัชนีข้าม redeploy ให้แนบ persistent disk แล้วตั้ง `PAT_RESEARCH_DATABASE_PATH=/var/data/research.sqlite` ดู [วิธีตั้งห้องและขอบเขตการค้น](docs/research.md)
 

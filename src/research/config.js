@@ -19,10 +19,8 @@ function loadConfig(env = process.env, directory = resolve(__dirname, '../..')) 
   }
   const qaChannelId = id('PAT_RESEARCH_CHANNEL_ID');
   if (qaChannelId === env.PAT_CHAT_CHANNEL_ID?.trim()) throw new Error('PAT_RESEARCH_CHANNEL_ID must be different from PAT_CHAT_CHANNEL_ID');
-  const users = required('PAT_RESEARCH_ALLOWED_USER_IDS').split(',').map(value => value.trim());
-  if (users.some(value => !/^\d{17,20}$/.test(value))) throw new Error('Invalid PAT_RESEARCH_ALLOWED_USER_IDS');
   return {
-    qaChannelId, allowedUserIds: new Set(users),
+    qaChannelId,
     geminiApiKey: required('GEMINI_API_KEY'),
     geminiModel: env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
     databasePath: resolve(directory, env.PAT_RESEARCH_DATABASE_PATH || 'data/research.sqlite'),

@@ -15,7 +15,7 @@ function splitMessage(text, max = 1900) {
   return chunks;
 }
 
-function createAssistant({ store, source, model, qaChannelId, allowedUserIds, status, logger = console, authorizeOutput = async () => {} }) {
+function createAssistant({ store, source, model, qaChannelId, status, logger = console, authorizeOutput = async () => {} }) {
   const histories = new Map();
   const queues = new Map();
   const counts = new Map();
@@ -107,7 +107,7 @@ function createAssistant({ store, source, model, qaChannelId, allowedUserIds, st
   return {
     async handle(message) {
       if (stopped || !message.guildId || message.channelId !== qaChannelId || message.author?.bot
-        || !allowedUserIds.has(message.author?.id) || !message.content?.trim()) return;
+        || !message.content?.trim()) return;
       const key = `${message.channelId}:${message.author.id}`;
       if (pending >= 6 || (counts.get(key) ?? 0) >= 2) {
         await send(message, 'มีคำถามกำลังประมวลผลอยู่ รอสักครู่แล้วลองใหม่ครับ');

@@ -21,7 +21,7 @@ function fixture() {
   client.channels = { fetch: async () => qa };
   const store = createStore(':memory:');
   const source = { discover: async () => [], canRead: c => c.id !== '99', record: m => ({ id: m.id, channelId: m.channelId, guildId: m.guildId, guildName: 'Friends', channelName: 'general', content: m.content, authorId: '30', authorName: 'Alice', createdAt: 1700000000000 }) };
-  const config = { qaChannelId: '99', allowedUserIds: new Set(['owner']), pagesPerChannel: 1, syncIntervalMs: 60000 };
+  const config = { qaChannelId: '99', pagesPerChannel: 1, syncIntervalMs: 60000 };
   const runtime = createRuntime({ client, store, source, config, model: {}, logger: { warn() {}, log() {} } });
   const message = { id: '100', guildId: '10', channelId: '20', channel: { id: '20' }, author: { id: '30' }, content: 'pizza' };
   return { client, store, runtime, message, qa };
@@ -60,14 +60,10 @@ test('a disconnected shared client prevents indexing and live ingestion', async 
   } finally { await runtime.stop(); }
 });
 
-test('startup rejects public Q&A channels and untrusted role/member visibility grants', async () => {
-  for (const mode of ['public', 'role', 'member']) {
-    const { runtime, qa } = fixture();
-    if (mode === 'public') qa.permissionsFor = () => new PermissionsBitField([P.ViewChannel, P.ReadMessageHistory, P.SendMessages]);
-    if (mode === 'role') qa.guild.roles.cache.set('readers', { id: 'readers', permissions: new PermissionsBitField([]) });
-    if (mode === 'member') qa.permissionOverwrites.cache.set('stranger', { id: 'stranger', type: 1, allow: new PermissionsBitField([P.ViewChannel]) });
-    try { await assert.rejects(runtime.start(), /private|trusted/i); } finally { await runtime.stop(); }
-  }
+test('startup rejects a public Q&A channel', async () => {
+  const { runtime, qa } = fixture();
+  qa.permissionsFor = () => new PermissionsBitField([P.ViewChannel, P.ReadMessageHistory, P.SendMessages]);
+  try { await assert.rejects(runtime.start(), /private/i); } finally { await runtime.stop(); }
 });
 
 test('a Q&A channel opened to everyone after startup receives no status or answers', async () => {

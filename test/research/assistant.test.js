@@ -10,7 +10,7 @@ function fixture(overrides = {}) {
   const message = { id: '200', guildId: '10', channelId: '99', author: { id: 'owner', bot: false }, content: 'หมูกระทะวันไหน', channel: { sendTyping: async () => {}, send: async payload => sent.push(payload) } };
   const assistant = createAssistant({ store, source: { refresh: async () => evidence },
     model: { plan: async () => ['หมูกระทะ'], answer: async () => ({ answer: 'วันศุกร์ครับ [1]', sourceIds: [1] }) },
-    qaChannelId: '99', allowedUserIds: new Set(['owner', 'other']), status: () => ({ messages: 1, channels: 1, complete: 1, errors: 0 }),
+    qaChannelId: '99', status: () => ({ messages: 1, channels: 1, complete: 1, errors: 0 }),
     logger: { warn() {} }, ...overrides,
   });
   return { assistant, store, message, sent };
@@ -30,10 +30,9 @@ test('answers contain verified citations with server, channel, date and exact me
   } finally { store.close(); }
 });
 
-test('untrusted users, bots, DMs and other channels never invoke retrieval or generation', async () => {
+test('bots, DMs and other channels never invoke retrieval or generation', async () => {
   const { assistant, store, message, sent } = fixture({ model: { plan: async () => { throw new Error('must not call'); } } });
   try {
-    await assistant.handle({ ...message, author: { id: 'stranger' } });
     await assistant.handle({ ...message, author: { id: 'owner', bot: true } });
     await assistant.handle({ ...message, channelId: 'elsewhere' });
     await assistant.handle({ ...message, guildId: null });

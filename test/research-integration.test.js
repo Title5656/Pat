@@ -21,7 +21,7 @@ test('research is optional and an unchanged Pat environment disables it', () => 
 test('research reuses Pat Gemini configuration and needs no second Discord identity', () => {
   const config = loadConfig({
     PAT_CHAT_CHANNEL_ID: '100000000000000001', PAT_RESEARCH_CHANNEL_ID: '100000000000000002',
-    PAT_RESEARCH_ALLOWED_USER_IDS: '100000000000000003', GEMINI_API_KEY: 'existing-key', GEMINI_MODEL: 'existing-model',
+    GEMINI_API_KEY: 'existing-key', GEMINI_MODEL: 'existing-model',
   });
   assert.equal(config.geminiApiKey, 'existing-key');
   assert.equal(config.geminiModel, 'existing-model');
@@ -32,7 +32,7 @@ test('research reuses Pat Gemini configuration and needs no second Discord ident
 
 test('chat and research cannot share a channel and produce conflicting replies', () => {
   assert.throws(() => loadConfig({ PAT_CHAT_CHANNEL_ID: '100000000000000001',
-    PAT_RESEARCH_CHANNEL_ID: '100000000000000001', PAT_RESEARCH_ALLOWED_USER_IDS: '100000000000000003',
+    PAT_RESEARCH_CHANNEL_ID: '100000000000000001',
     GEMINI_API_KEY: 'existing-key' }), /different|distinct/i);
 });
 
@@ -52,7 +52,7 @@ test('research starts on the connected Pat client and stopping it leaves Pat con
   client.on('messageCreate', oldListener);
   const store = createStore(':memory:');
   const runtime = createRuntime({ client, store, model: {}, source: { discover: async () => [] },
-    config: { qaChannelId: '20', allowedUserIds: new Set(['owner']), pagesPerChannel: 1, syncIntervalMs: 60000 },
+    config: { qaChannelId: '20', pagesPerChannel: 1, syncIntervalMs: 60000 },
     logger: { log() {}, warn() {} },
   });
   try {
@@ -74,7 +74,7 @@ test('normal chat and research answer only their own room and maintain separate 
     memory: createMemory(), generate: async ({ input }) => { normalInputs.push(input); return 'normal answer'; },
   }) });
   const research = createAssistant({ store, source: { refresh: async () => evidence },
-    qaChannelId: 'research', allowedUserIds: new Set(['owner']), status: () => ({ messages: 1, complete: 1, channels: 1 }),
+    qaChannelId: 'research', status: () => ({ messages: 1, complete: 1, channels: 1 }),
     model: { plan: async ({ history }) => { searchHistories.push([...history]); return ['pizza']; },
       answer: async () => ({ answer: 'นัดวันศุกร์ [1]', sourceIds: [1] }) },
   });
@@ -109,7 +109,7 @@ test('failed feature bootstrap closes its database without logging out Pat', asy
     destroy: () => { destroyed = true; } });
   try {
     await assert.rejects(startResearch({ client, env: {
-      PAT_RESEARCH_CHANNEL_ID: '100000000000000002', PAT_RESEARCH_ALLOWED_USER_IDS: '100000000000000003',
+      PAT_RESEARCH_CHANNEL_ID: '100000000000000002',
       GEMINI_API_KEY: 'test-key', PAT_RESEARCH_DATABASE_PATH: join(directory, 'research.sqlite'),
     } }), /PAT_RESEARCH_CHANNEL_ID/);
     assert.equal(destroyed, false);

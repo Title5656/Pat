@@ -7,7 +7,7 @@ function createRuntime({ client, store, model, config, logger = console,
   source = createDiscordSource({ client, qaChannelId: config.qaChannelId, logger }) }) {
   const indexer = createIndexer({ store, source, pagesPerChannel: config.pagesPerChannel, logger });
   const assistant = createAssistant({ store, source, model, qaChannelId: config.qaChannelId,
-    allowedUserIds: config.allowedUserIds, status: () => indexer.status(), logger, authorizeOutput: checkOutput });
+    status: () => indexer.status(), logger, authorizeOutput: checkOutput });
   const jobs = new Set();
   const listeners = [];
   let active = false;
@@ -19,22 +19,8 @@ function createRuntime({ client, store, model, config, logger = console,
       || !channel.permissionsFor(channel.guild.members.me)?.has([P.ViewChannel, P.SendMessages, P.ReadMessageHistory])) {
       throw new Error('PAT_RESEARCH_CHANNEL_ID must be a guild text channel Pat can read and write');
     }
-    await channel.guild.roles.fetch();
     if (channel.permissionsFor(channel.guild.roles.everyone)?.has(P.ViewChannel)) {
       throw new Error('PAT_RESEARCH_CHANNEL_ID must be private: deny View Channel for @everyone');
-    }
-    for (const role of channel.guild.roles.cache.values()) {
-      // Server administrators bypass channel permissions by Discord design.
-      if (role.permissions.has(P.Administrator) || role.tags?.botId === client.user.id) continue;
-      if (channel.permissionsFor(role)?.has(P.ViewChannel)) {
-        throw new Error('PAT_RESEARCH_CHANNEL_ID must grant visibility to trusted users directly, not shared roles');
-      }
-    }
-    for (const overwrite of channel.permissionOverwrites.cache.values()) {
-      if (overwrite.type === 1 && overwrite.allow.has(P.ViewChannel)
-        && overwrite.id !== client.user.id && !config.allowedUserIds.has(overwrite.id)) {
-        throw new Error('PAT_RESEARCH_CHANNEL_ID has a visibility grant for a non-trusted user');
-      }
     }
   }
   function on(event, callback) {
@@ -57,7 +43,7 @@ function createRuntime({ client, store, model, config, logger = console,
   }
   on(Events.MessageCreate, async message => {
     if (message.channelId === config.qaChannelId) {
-      if (message.author?.bot || !config.allowedUserIds.has(message.author?.id) || !message.content?.trim()) return;
+      if (message.author?.bot || !message.content?.trim()) return;
       await checkOutput();
       await assistant.handle(message);
       return;

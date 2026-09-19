@@ -6,9 +6,9 @@ function createGeminiGenerator({ apiKey, model, GoogleGenAIClass = GoogleGenAI }
   return async ({ instructions, input }) => {
     const response = await client.models.generateContent({
       model,
-      contents: input.map(({ role, content }) => ({
+      contents: input.map(({ role, content, images = [] }) => ({
         role,
-        parts: [{ text: content }],
+        parts: [{ text: content }, ...images.map((image) => ({ inlineData: image }))],
       })),
       config: { systemInstruction: instructions },
     });

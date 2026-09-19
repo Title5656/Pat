@@ -50,6 +50,36 @@ test('does not save a failed model request', async () => {
   assert.deepEqual(memory.get('room'), []);
 });
 
+test('sends images with the current prompt without retaining their bytes', async () => {
+  const memory = createMemory();
+  let request;
+  const conversation = createConversation({
+    memory,
+    generate: async (value) => {
+      request = value;
+      return 'เป็นแมว';
+    },
+  });
+  const images = [{ data: 'Y2F0', mimeType: 'image/png' }];
+
+  await conversation.reply({
+    channelId: 'room',
+    userName: 'มิน',
+    text: 'รูปอะไร',
+    images,
+  });
+
+  assert.deepEqual(request.input.at(-1), {
+    role: 'user',
+    content: 'มิน: รูปอะไร',
+    images,
+  });
+  assert.deepEqual(memory.get('room'), [
+    { role: 'user', content: 'มิน: รูปอะไร' },
+    { role: 'model', content: 'เป็นแมว' },
+  ]);
+});
+
 test('serializes overlapping replies in the same channel', async () => {
   const memory = createMemory();
   const requests = [];

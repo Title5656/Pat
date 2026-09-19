@@ -6,12 +6,14 @@ function createMessage({
   channelId = 'chat-room',
   content = 'หวัดดีแพท',
   bot = false,
+  attachments = [],
   sendError,
 } = {}) {
   const calls = [];
   return {
     channelId,
     content,
+    attachments: new Map(attachments.map((attachment, index) => [index, attachment])),
     author: { bot, globalName: 'มิน', username: 'min' },
     member: { displayName: 'คุณมิน' },
     channel: {
@@ -24,6 +26,43 @@ function createMessage({
     calls,
   };
 }
+
+test('downloads an image-only message for the conversation', async () => {
+  const message = createMessage({
+    content: '',
+    attachments: [{
+      contentType: 'image/png',
+      name: 'cat.png',
+      size: 3,
+      url: 'https://cdn.discord.test/cat.png',
+    }],
+  });
+  let request;
+  const handler = createMessageHandler({
+    chatChannelId: 'chat-room',
+    conversation: {
+      reply: async (value) => {
+        request = value;
+        return 'แมวนี่นา';
+      },
+    },
+    fetchFn: async (url) => {
+      assert.equal(url, 'https://cdn.discord.test/cat.png');
+      return { ok: true, arrayBuffer: async () => Buffer.from('cat') };
+    },
+    logger: { error() {} },
+  });
+
+  await handler(message);
+
+  assert.deepEqual(request, {
+    channelId: 'chat-room',
+    userName: 'คุณมิน',
+    text: 'ช่วยดูรูปนี้หน่อย',
+    images: [{ data: Buffer.from('cat').toString('base64'), mimeType: 'image/png' }],
+  });
+  assert.equal(message.calls.at(-1)[1].content, 'แมวนี่นา');
+});
 
 test('answers a normal message in the configured channel', async () => {
   const message = createMessage();

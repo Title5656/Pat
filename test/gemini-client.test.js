@@ -41,6 +41,40 @@ test('maps conversation history to Gemini and returns response text', async () =
   assert.equal(result, 'คำตอบ');
 });
 
+test('maps attached images to Gemini inline data parts', async () => {
+  let request;
+  class FakeGoogleGenAI {
+    models = {
+      generateContent: async (value) => {
+        request = value;
+        return { text: 'แมว' };
+      },
+    };
+  }
+  const generate = createGeminiGenerator({
+    apiKey: 'key',
+    model: 'configured-model',
+    GoogleGenAIClass: FakeGoogleGenAI,
+  });
+
+  await generate({
+    instructions: 'persona',
+    input: [{
+      role: 'user',
+      content: 'มิน: รูปอะไร',
+      images: [{ data: 'Y2F0', mimeType: 'image/png' }],
+    }],
+  });
+
+  assert.deepEqual(request.contents, [{
+    role: 'user',
+    parts: [
+      { text: 'มิน: รูปอะไร' },
+      { inlineData: { data: 'Y2F0', mimeType: 'image/png' } },
+    ],
+  }]);
+});
+
 test('rejects an empty Gemini response', async () => {
   class FakeGoogleGenAI {
     models = { generateContent: async () => ({ text: '' }) };

@@ -75,3 +75,23 @@ test('reports the Gemini safety reason when a response is blocked', async () => 
     message: 'Gemini blocked the prompt: SAFETY.',
   });
 });
+
+test('rejects partial text when Gemini finishes for safety', async () => {
+  class FakeGoogleGenAI {
+    models = {
+      generateContent: async () => ({
+        text: 'partial text that must not be posted',
+        candidates: [{ finishReason: 'SAFETY' }],
+      }),
+    };
+  }
+  const generate = createGeminiGenerator({
+    apiKey: 'key',
+    model: 'configured-model',
+    GoogleGenAIClass: FakeGoogleGenAI,
+  });
+
+  await assert.rejects(() => generate({ instructions: 'persona', input: [] }), {
+    message: 'Gemini did not return a complete response (finish reason: SAFETY).',
+  });
+});

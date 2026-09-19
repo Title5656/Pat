@@ -88,11 +88,17 @@ test('uses a friendly fallback when Gemini fails', async () => {
 test('redacts credentials and limits the public Gemini error', async () => {
   const message = createMessage();
   const fakeApiKey = `AQ.${'A'.repeat(40)}`;
+  const bearerToken = 'ya29.private-bearer-token';
+  const jsonApiKey = 'private-json-key';
+  const quotedToken = 'private-quoted-token';
   const handler = createMessageHandler({
     chatChannelId: 'chat-room',
     conversation: {
       reply: async () => {
-        throw new Error(`request failed key=${fakeApiKey} ${'x'.repeat(600)}`);
+        throw new Error(
+          `request failed key=${fakeApiKey} Authorization: Bearer ${bearerToken} `
+          + `{"apiKey":"${jsonApiKey}"} token "${quotedToken}" ${'x'.repeat(600)}`,
+        );
       },
     },
     logger: { error() {} },
@@ -102,8 +108,13 @@ test('redacts credentials and limits the public Gemini error', async () => {
 
   const content = message.calls.at(-1)[1].content;
   const publicError = content.split('Gemini error: ')[1];
-  assert.equal(content.includes(fakeApiKey), false);
+  for (const credential of [fakeApiKey, bearerToken, jsonApiKey, quotedToken]) {
+    assert.equal(content.includes(credential), false);
+  }
   assert.match(content, /key=\[REDACTED\]/);
+  assert.match(content, /Bearer \[REDACTED\]/);
+  assert.match(content, /"apiKey":\s*"?\[REDACTED\]"?/);
+  assert.match(content, /token "\[REDACTED\]"/);
   assert.equal(publicError.length, 500);
 });
 

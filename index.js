@@ -130,7 +130,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         const description = isExternalGuild
           ? [`🌐 **จากเซิร์ฟเวอร์: ${sourceGuildName}**`, ...lines].join('\n')
           : lines.join('\n');
-        await channel.send({ embeds: [{ title, color: isExternalGuild ? 0xA855F7 : color, description }], allowedMentions: { parse: [] } });
+        await channel.send({ embeds: [{ title, color: isExternalGuild ? FF00FF : color, description }], allowedMentions: { parse: [] } });
       } catch (err) {
         console.error('Error handling voice log event:', err.message);
       }

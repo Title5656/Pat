@@ -5,11 +5,12 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError } = {}) {
+function setup({ sendable = true, fetchError, sendError, port } = {}) {
   const messages = [];
   const errors = [];
   const listeners = new Map();
   let clientOptions;
+  let httpHandler;
   let fetchCount = 0;
   const fetchedChannelIds = [];
   class Client {
@@ -33,6 +34,7 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
     };
     once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
+    isReady() { return false; }
     login() { return Promise.resolve(); }
   }
   vm.runInNewContext(source, {
@@ -63,6 +65,12 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
       if (id === './src/chat/handle-message') {
         return { createMessageHandler: () => async () => {} };
       }
+      if (id === 'node:http') {
+        return { createServer: (handler) => {
+          httpHandler = handler;
+          return { listen() {} };
+        } };
+      }
       throw new Error(`Unexpected require: ${id}`);
     },
     process: {
@@ -72,6 +80,7 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
         VOICE_LOG_CHANNEL_ID: 'log',
         GEMINI_API_KEY: 'key',
         GEMINI_MODEL: 'model',
+        PORT: port,
       },
     },
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
@@ -87,6 +96,11 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
     }),
     hasListener: (event) => listeners.has(event),
     emit: (oldState, newState) => listeners.get('voice')(oldState, newState),
+    request: (url) => {
+      const response = { body: '', writeHead(status, headers) { this.status = status; this.headers = headers; }, end(body) { this.body = body; } };
+      httpHandler({ method: 'GET', url }, response);
+      return response;
+    },
   };
 }
 
@@ -231,4 +245,12 @@ test('binds normal messages with the message-content intents', async () => {
   assert.deepEqual(Array.from(app.clientOptions.intents), [1, 2, 4, 8]);
   await app.emitReady();
 
+});
+
+test('serves Render health checks at /health', () => {
+  const response = setup({ port: '3000' }).request('/health');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['content-type'], 'text/plain');
+  assert.equal(response.body, 'ok');
 });

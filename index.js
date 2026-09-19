@@ -43,7 +43,12 @@ const conversation = createConversation({ generate, memory });
 const messageHandler = createMessageHandler({ chatChannelId, conversation });
 
 if (process.env.PORT) {
-  require('node:http').createServer((_req, res) => {
+  require('node:http').createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      res.end('ok');
+      return;
+    }
     res.writeHead(client.isReady() ? 200 : 503, { 'content-type': 'text/plain' });
     res.end(client.isReady() ? 'ok' : 'discord disconnected');
   }).listen(process.env.PORT, '0.0.0.0');

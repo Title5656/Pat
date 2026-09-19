@@ -102,7 +102,8 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     const sourceGuild = newState.guild ?? oldState.guild;
     const sourceGuildName = (sourceGuild?.name ?? sourceGuild?.id ?? '')
       .replace(/\s+/g, ' ').replace(/[\\`*_{}\[\]()<>#+\-.!|~]/g, '\\$&');
-    const serverSuffix = sourceGuild && sourceGuild.id !== channel.guildId
+    const isExternalGuild = sourceGuild && sourceGuild.id !== channel.guildId;
+    const serverSuffix = isExternalGuild
       ? ` (เซิร์ฟเวอร์: ${sourceGuildName})` : '';
     const user = `> 👤 **User:** ${member.displayName}`;
     const timestamp = `> 🕒 **Time:** ${time}`;
@@ -121,7 +122,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
     for (const [title, color, lines] of logs) {
       try {
-        await channel.send({ embeds: [{ title, color, description: lines.join('\n') }], allowedMentions: { parse: [] } });
+        const description = isExternalGuild
+          ? [`🌐 **จากเซิร์ฟเวอร์: ${sourceGuildName}**`, ...lines].join('\n')
+          : lines.join('\n');
+        await channel.send({ embeds: [{ title, color: isExternalGuild ? 0xA855F7 : color, description }], allowedMentions: { parse: [] } });
       } catch (err) {
         console.error('Error handling voice log event:', err.message);
       }

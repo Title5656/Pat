@@ -15,7 +15,10 @@ function createPatHandler({ conversation, logger = console }) {
         userName: interaction.user.globalName ?? interaction.user.username,
         text,
       });
-      await interaction.editReply(answer.slice(0, 2000));
+      await interaction.editReply({
+        content: answer.slice(0, 2000),
+        allowedMentions: { parse: [] },
+      });
     } catch (error) {
       logger.error('Failed to answer /pat:', error.message);
       await interaction.editReply(FAILURE_REPLY);

@@ -49,3 +49,38 @@ test('does not save a failed model request', async () => {
 
   assert.deepEqual(memory.get('room'), []);
 });
+
+test('serializes overlapping replies in the same channel', async () => {
+  const memory = createMemory();
+  const requests = [];
+  const resolvers = [];
+  const conversation = createConversation({
+    memory,
+    generate: (request) => {
+      requests.push(request);
+      return new Promise((resolve) => resolvers.push(resolve));
+    },
+  });
+
+  const first = conversation.reply({ channelId: 'room', userName: 'เอ', text: 'หนึ่ง' });
+  const second = conversation.reply({ channelId: 'room', userName: 'บี', text: 'สอง' });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(requests.length, 1);
+
+  resolvers[0]('ตอบหนึ่ง');
+  await first;
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1].input, [
+    { role: 'user', content: 'เอ: หนึ่ง' },
+    { role: 'model', content: 'ตอบหนึ่ง' },
+    { role: 'user', content: 'บี: สอง' },
+  ]);
+
+  resolvers[1]('ตอบสอง');
+  await second;
+});

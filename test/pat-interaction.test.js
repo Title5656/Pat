@@ -42,7 +42,10 @@ test('defers and publishes the conversation answer', async () => {
   assert.deepEqual(interaction.calls, [
     ['option', 'ข้อความ', true],
     ['defer'],
-    ['edit', 'เอ่อ หวัดดี...ใช่ หวัดดี'],
+    ['edit', {
+      content: 'เอ่อ หวัดดี...ใช่ หวัดดี',
+      allowedMentions: { parse: [] },
+    }],
   ]);
 });
 
@@ -72,7 +75,8 @@ test('truncates responses to the Discord message limit', async () => {
 
   await handler(interaction);
 
-  assert.equal(interaction.calls.at(-1)[1].length, 2000);
+  assert.equal(interaction.calls.at(-1)[1].content.length, 2000);
+  assert.deepEqual(interaction.calls.at(-1)[1].allowedMentions, { parse: [] });
 });
 
 test('ignores unrelated interactions', async () => {

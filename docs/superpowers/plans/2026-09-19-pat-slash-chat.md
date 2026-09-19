@@ -16,6 +16,7 @@
 - ช่องรับข้อความชื่อ `ข้อความ`, บังคับกรอก, และยาวได้ไม่เกิน 1,000 ตัวอักษร
 - คำตอบเป็นข้อความสาธารณะในห้องที่เรียกคำสั่ง
 - เก็บบทสนทนาสูงสุด 12 ข้อความต่อห้องและไม่บันทึกลงดิสก์
+- จัดคิวคำตอบภายในห้องเดียวกันและปิด mentions ในข้อความที่ Gemini สร้าง
 - ใช้ guild command ที่กำหนดด้วย `DISCORD_GUILD_ID`
 - ต้องใช้ `DISCORD_TOKEN`, `VOICE_LOG_CHANNEL_ID`, `DISCORD_GUILD_ID`, `GEMINI_API_KEY`, และ `GEMINI_MODEL`
 - ระบบ voice logger เดิมต้องผ่าน test suite เดิมทั้งหมด
@@ -271,15 +272,25 @@ module.exports = { PAT_PERSONA };
 const { PAT_PERSONA } = require('./persona');
 
 function createConversation({ generate, memory }) {
+  const queues = new Map();
   return {
     async reply({ channelId, userName, text }) {
-      const userMessage = { role: 'user', content: `${userName}: ${text}` };
-      const answer = await generate({
-        instructions: PAT_PERSONA,
-        input: [...memory.get(channelId), userMessage],
+      const previous = queues.get(channelId) ?? Promise.resolve();
+      const current = previous.catch(() => {}).then(async () => {
+        const userMessage = { role: 'user', content: `${userName}: ${text}` };
+        const answer = await generate({
+          instructions: PAT_PERSONA,
+          input: [...memory.get(channelId), userMessage],
+        });
+        memory.append(channelId, userMessage, { role: 'model', content: answer });
+        return answer;
       });
-      memory.append(channelId, userMessage, { role: 'model', content: answer });
-      return answer;
+      queues.set(channelId, current);
+      try {
+        return await current;
+      } finally {
+        if (queues.get(channelId) === current) queues.delete(channelId);
+      }
     },
   };
 }
@@ -291,7 +302,7 @@ module.exports = { createConversation };
 
 Run: `node --test test/chat-conversation.test.js`
 
-Expected: 2 tests pass.
+Expected: 3 tests pass.
 
 - [ ] **Step 6: Commit persona and conversation behavior**
 
@@ -469,7 +480,10 @@ function createPatHandler({ conversation, logger = console }) {
         userName: interaction.user.globalName ?? interaction.user.username,
         text,
       });
-      await interaction.editReply(answer.slice(0, 2000));
+      await interaction.editReply({
+        content: answer.slice(0, 2000),
+        allowedMentions: { parse: [] },
+      });
     } catch (error) {
       logger.error('Failed to answer /pat:', error.message);
       await interaction.editReply(FAILURE_REPLY);
@@ -484,7 +498,7 @@ module.exports = { createPatHandler };
 
 Run: `node --test test/pat-interaction.test.js`
 
-Expected: 3 tests pass.
+Expected: 4 tests pass.
 
 - [ ] **Step 5: Commit the interaction handler**
 

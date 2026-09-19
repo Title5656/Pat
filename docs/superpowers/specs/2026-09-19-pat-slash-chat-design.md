@@ -40,9 +40,10 @@ Pat ใช้ภาษาไทยเป็นหลัก ตอบกระช
 - ถ้าโมเดลตอบช้าหรือเรียก API ไม่สำเร็จ ให้แก้ deferred reply เป็น `แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠`
 - ไม่เก็บข้อความรอบที่เรียก API ล้มเหลวลง memory
 - ตัดคำตอบที่เกินขีดจำกัดข้อความ Discord ก่อนส่ง
+- ปิดการ parse mentions ในคำตอบของโมเดลเพื่อไม่ให้เกิด ping จากข้อความที่สร้างขึ้น
+- จัดคิวคำขอแยกตามห้องเพื่อรักษาลำดับบทสนทนาเมื่อมีคนเรียกพร้อมกัน
 - interaction ที่ไม่ใช่ `/pat` ถูกละเว้น
 
 ## Testing
 
 ใช้ `node:test` และ dependency injection เพื่อทดสอบ command definition, memory limit, การประกอบ prompt, success path, failure path และการละเว้น interaction อื่น โดยไม่เชื่อม Discord หรือ Gemini จริง จากนั้นรัน syntax check และ test suite เดิมทั้งหมดเพื่อยืนยันว่า voice logger ไม่ถดถอย
-

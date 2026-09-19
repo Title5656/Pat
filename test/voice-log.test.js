@@ -10,8 +10,10 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   const errors = [];
   const listeners = new Map();
   const commandRegistrations = [];
+  let clientOptions;
   let fetchCount = 0;
   class Client {
+    constructor(options) { clientOptions = options; }
     application = { commands: {} };
     channels = {
       fetch: async () => {
@@ -36,10 +38,16 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
       if (id === 'discord.js') {
         return {
           Client,
-          GatewayIntentBits: { Guilds: 1, GuildVoiceStates: 2 },
+          GatewayIntentBits: {
+            Guilds: 1,
+            GuildVoiceStates: 2,
+            GuildMessages: 4,
+            MessageContent: 8,
+          },
           Events: {
             ClientReady: 'ready',
             InteractionCreate: 'interaction',
+            MessageCreate: 'message',
             VoiceStateUpdate: 'voice',
           },
         };
@@ -61,12 +69,15 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
       if (id === './src/chat/handle-pat') {
         return { createPatHandler: () => async () => {} };
       }
+      if (id === './src/chat/handle-message') {
+        return { createMessageHandler: () => async () => {} };
+      }
       throw new Error(`Unexpected require: ${id}`);
     },
     process: {
       env: {
         DISCORD_TOKEN: 'test-token',
-        DISCORD_GUILD_ID: 'guild',
+        PAT_CHAT_CHANNEL_ID: 'chat-room',
         VOICE_LOG_CHANNEL_ID: 'log',
         GEMINI_API_KEY: 'key',
         GEMINI_MODEL: 'model',
@@ -76,6 +87,7 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   });
   return {
     messages, errors, commandRegistrations,
+    get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
     emitReady: () => listeners.get('ready')({
       application: { commands: {} },
@@ -138,12 +150,13 @@ test('handles send failures without rejecting the event', async () => {
   assert.match(app.errors.join('\n'), /missing permissions/);
 });
 
-test('registers /pat on ready and binds the interaction listener', async () => {
+test('binds normal messages with the message-content intents', async () => {
   const app = setup();
 
-  assert.equal(app.hasListener('interaction'), true);
+  assert.equal(app.hasListener('message'), true);
+  assert.equal(app.hasListener('interaction'), false);
+  assert.deepEqual(Array.from(app.clientOptions.intents), [1, 2, 4, 8]);
   await app.emitReady();
 
-  assert.equal(app.commandRegistrations.length, 1);
-  assert.equal(app.commandRegistrations[0][1], 'guild');
+  assert.equal(app.commandRegistrations.length, 0);
 });

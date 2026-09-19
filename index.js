@@ -1,13 +1,12 @@
 const { Client, GatewayIntentBits, Events } = require('discord.js');
-const { registerPatCommand } = require('./src/chat/command');
 const { createMemory } = require('./src/chat/memory');
 const { createConversation } = require('./src/chat/conversation');
 const { createGeminiGenerator } = require('./src/chat/gemini-client');
-const { createPatHandler } = require('./src/chat/handle-pat');
+const { createMessageHandler } = require('./src/chat/handle-message');
 
 const token = process.env.DISCORD_TOKEN;
-const guildId = process.env.DISCORD_GUILD_ID;
 const logChannelId = process.env.VOICE_LOG_CHANNEL_ID;
+const chatChannelId = process.env.PAT_CHAT_CHANNEL_ID;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
@@ -19,8 +18,8 @@ if (!logChannelId) {
   console.error('Error: VOICE_LOG_CHANNEL_ID is not defined in environment variables.');
 }
 
-if (!guildId) {
-  console.error('Error: DISCORD_GUILD_ID is not defined in environment variables.');
+if (!chatChannelId) {
+  console.error('Error: PAT_CHAT_CHANNEL_ID is not defined in environment variables.');
 }
 
 if (!geminiApiKey) {
@@ -31,6 +30,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -39,7 +40,7 @@ const generate = geminiApiKey
   ? createGeminiGenerator({ apiKey: geminiApiKey, model: geminiModel })
   : async () => { throw new Error('GEMINI_API_KEY is not configured.'); };
 const conversation = createConversation({ generate, memory });
-const patHandler = createPatHandler({ conversation });
+const messageHandler = createMessageHandler({ chatChannelId, conversation });
 
 if (process.env.PORT) {
   require('node:http').createServer((_req, res) => {
@@ -48,17 +49,11 @@ if (process.env.PORT) {
   }).listen(process.env.PORT, '0.0.0.0');
 }
 
-client.once(Events.ClientReady, async (readyClient) => {
+client.once(Events.ClientReady, (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-  try {
-    await registerPatCommand(readyClient.application, guildId);
-    console.log('Registered /pat command.');
-  } catch (err) {
-    console.error('Failed to register /pat command:', err.message);
-  }
 });
 
-client.on(Events.InteractionCreate, patHandler);
+client.on(Events.MessageCreate, messageHandler);
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   const member = newState.member ?? oldState.member;
@@ -107,7 +102,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   }
 });
 
-if (token && logChannelId && guildId && geminiApiKey) {
+if (token && logChannelId && chatChannelId && geminiApiKey) {
   client.login(token).catch((err) => {
     console.error('Failed to log in to Discord:', err.message);
   });

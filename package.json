@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node --env-file=.env index.js",
-    "check": "node --check index.js && node --check src/chat/command.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-pat.js",
+    "check": "node --check index.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-message.js",
     "test": "node --test"
   },
   "dependencies": {

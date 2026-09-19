@@ -1,7 +1,14 @@
 const { Client, GatewayIntentBits, Events } = require('discord.js');
+const { createMemory } = require('./src/chat/memory');
+const { createConversation } = require('./src/chat/conversation');
+const { createGeminiGenerator } = require('./src/chat/gemini-client');
+const { createMessageHandler } = require('./src/chat/handle-message');
 
 const token = process.env.DISCORD_TOKEN;
 const logChannelId = process.env.VOICE_LOG_CHANNEL_ID;
+const chatChannelId = process.env.PAT_CHAT_CHANNEL_ID;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const geminiModel = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
 if (!token) {
   console.error('Error: DISCORD_TOKEN is not defined in environment variables.');
@@ -11,12 +18,29 @@ if (!logChannelId) {
   console.error('Error: VOICE_LOG_CHANNEL_ID is not defined in environment variables.');
 }
 
+if (!chatChannelId) {
+  console.error('Error: PAT_CHAT_CHANNEL_ID is not defined in environment variables.');
+}
+
+if (!geminiApiKey) {
+  console.error('Error: GEMINI_API_KEY is not defined in environment variables.');
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
+
+const memory = createMemory({ maxMessages: 12 });
+const generate = geminiApiKey
+  ? createGeminiGenerator({ apiKey: geminiApiKey, model: geminiModel })
+  : async () => { throw new Error('GEMINI_API_KEY is not configured.'); };
+const conversation = createConversation({ generate, memory });
+const messageHandler = createMessageHandler({ chatChannelId, conversation });
 
 if (process.env.PORT) {
   require('node:http').createServer((_req, res) => {
@@ -28,6 +52,8 @@ if (process.env.PORT) {
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
 });
+
+client.on(Events.MessageCreate, messageHandler);
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   const member = newState.member ?? oldState.member;
@@ -100,7 +126,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   }
 });
 
-if (token) {
+if (token && logChannelId && chatChannelId && geminiApiKey) {
   client.login(token).catch((err) => {
     console.error('Failed to log in to Discord:', err.message);
   });

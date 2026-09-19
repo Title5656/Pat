@@ -9,8 +9,11 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   const messages = [];
   const errors = [];
   const listeners = new Map();
+  let clientOptions;
   let fetchCount = 0;
   class Client {
+    constructor(options) { clientOptions = options; }
+    application = { commands: {} };
     channels = {
       fetch: async () => {
         fetchCount++;
@@ -25,23 +28,61 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
         };
       },
     };
-    once() {}
+    once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
     login() { return Promise.resolve(); }
   }
   vm.runInNewContext(source, {
-    require: () => ({
-      Client,
-      GatewayIntentBits: { Guilds: 1, GuildVoiceStates: 2 },
-      Events: { ClientReady: 'ready', VoiceStateUpdate: 'voice' },
-    }),
-    process: { env: { DISCORD_TOKEN: 'test-token', VOICE_LOG_CHANNEL_ID: 'log' } },
+    require: (id) => {
+      if (id === 'discord.js') {
+        return {
+          Client,
+          GatewayIntentBits: {
+            Guilds: 1,
+            GuildVoiceStates: 2,
+            GuildMessages: 4,
+            MessageContent: 8,
+          },
+          Events: {
+            ClientReady: 'ready',
+            MessageCreate: 'message',
+            VoiceStateUpdate: 'voice',
+          },
+        };
+      }
+      if (id === './src/chat/memory') return { createMemory: () => ({ memory: true }) };
+      if (id === './src/chat/conversation') {
+        return { createConversation: () => ({ conversation: true }) };
+      }
+      if (id === './src/chat/gemini-client') {
+        return { createGeminiGenerator: () => async () => 'answer' };
+      }
+      if (id === './src/chat/handle-message') {
+        return { createMessageHandler: () => async () => {} };
+      }
+      throw new Error(`Unexpected require: ${id}`);
+    },
+    process: {
+      env: {
+        DISCORD_TOKEN: 'test-token',
+        PAT_CHAT_CHANNEL_ID: 'chat-room',
+        VOICE_LOG_CHANNEL_ID: 'log',
+        GEMINI_API_KEY: 'key',
+        GEMINI_MODEL: 'model',
+      },
+    },
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
     console: { log() {}, error: (...args) => errors.push(args.join(' ')) },
   });
   return {
     messages, errors,
+    get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
+    emitReady: () => listeners.get('ready')({
+      application: { commands: {} },
+      user: { tag: 'Pat#0001' },
+    }),
+    hasListener: (event) => listeners.has(event),
     emit: (oldState, newState) => listeners.get('voice')(oldState, newState),
   };
 }
@@ -153,4 +194,14 @@ test('handles send failures without rejecting the event', async () => {
   const app = setup({ sendError: new Error('missing permissions') });
   await app.emit(state(null), state('a'));
   assert.match(app.errors.join('\n'), /missing permissions/);
+});
+
+test('binds normal messages with the message-content intents', async () => {
+  const app = setup();
+
+  assert.equal(app.hasListener('message'), true);
+  assert.equal(app.hasListener('interaction'), false);
+  assert.deepEqual(Array.from(app.clientOptions.intents), [1, 2, 4, 8]);
+  await app.emitReady();
+
 });

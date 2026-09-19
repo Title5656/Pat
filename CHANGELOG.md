@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a Gemini-backed chat channel where Pat answers normal messages with a Thai character prompt.
+- Restrict chat responses to `PAT_CHAT_CHANNEL_ID` and ignore other channels and bot messages.
+- Keep the latest 12 conversation messages in memory per Discord channel.
+- Return a friendly fallback when Gemini fails and preserve the existing voice logger.
 - Update bot branding, package metadata, and repository documentation to Pat (แพท).
 - Configure the Render keepalive URL through the `RENDER_SERVICE_URL` repository Actions variable.
 - Align package and lockfile metadata at version 0.1.0; keep dependency versions unchanged.

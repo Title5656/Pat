@@ -99,19 +99,24 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     const oldChannel = oldState.channel?.name ?? oldState.channelId;
     const newChannel = newState.channel?.name ?? newState.channelId;
     const voiceChannel = newChannel ?? oldChannel;
+    const sourceGuild = newState.guild ?? oldState.guild;
+    const sourceGuildName = (sourceGuild?.name ?? sourceGuild?.id ?? '')
+      .replace(/\s+/g, ' ').replace(/[\\`*_{}\[\]()<>#+\-.!|~]/g, '\\$&');
+    const serverSuffix = sourceGuild && sourceGuild.id !== channel.guildId
+      ? ` (เซิร์ฟเวอร์: ${sourceGuildName})` : '';
     const user = `> 👤 **User:** ${member.displayName}`;
     const timestamp = `> 🕒 **Time:** ${time}`;
     const logs = [];
 
-    if (isJoin) logs.push(['🟢 Voice Joined', 0x57F287, [user, `> 🔊 **Channel:** \`${newChannel}\``, timestamp]]);
-    if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🔊 **Channel:** \`${oldChannel}\``, '> ⏱️ **Duration:** Coming soon', timestamp]]);
-    if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 📤 **From:** \`${oldChannel}\``, `> 📥 **To:** \`${newChannel}\``, timestamp]]);
-    if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\``, timestamp]]);
-    if (deafChanged) logs.push(['🎧 Deafen Changed', 0x9B59B6, [user, `> 🎧 **Status:** ${newState.selfDeaf ? 'Deafened 🔇' : 'Undeafened 🎧'}`, `> 🔊 **Channel:** \`${voiceChannel}\``, timestamp]]);
+    if (isJoin) logs.push(['🟢 Voice Joined', 0x57F287, [user, `> 🔊 **Channel:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
+    if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🔊 **Channel:** \`${oldChannel}\`${serverSuffix}`, '> ⏱️ **Duration:** Coming soon', timestamp]]);
+    if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 📤 **From:** \`${oldChannel}\`${serverSuffix}`, `> 📥 **To:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
+    if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
+    if (deafChanged) logs.push(['🎧 Deafen Changed', 0x9B59B6, [user, `> 🎧 **Status:** ${newState.selfDeaf ? 'Deafened 🔇' : 'Undeafened 🎧'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
     if (streamChanged) {
       const started = newState.streaming;
       logs.push([started ? '📺 Stream Started' : '📺 Stream Stopped', started ? 0x1ABC9C : 0x95A5A6,
-        [user, `> 🔊 **Channel:** \`${voiceChannel}\``, started ? '> 📡 **Status:** Streaming' : '> ⏱️ **Stream Duration:** Coming soon', timestamp]]);
+        [user, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, started ? '> 📡 **Status:** Streaming' : '> ⏱️ **Stream Duration:** Coming soon', timestamp]]);
     }
 
     for (const [title, color, lines] of logs) {

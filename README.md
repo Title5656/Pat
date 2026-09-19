@@ -1,6 +1,6 @@
 # Pat (แพท)
 
-บอท Discord สำหรับคุยกับแพทผ่าน Gemini และบันทึกเหตุการณ์ห้องเสียงในเซิร์ฟเวอร์เดียว
+บอท Discord สำหรับคุยกับแพทผ่าน Gemini และรวมแจ้งเตือนห้องเสียงจากทุกเซิร์ฟเวอร์ที่บอทเข้าร่วมไว้ในช่องหลัก
 
 URL บน Render: https://pat-discord-bot.onrender.com/
 
@@ -13,6 +13,7 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 - แสดงสาเหตุจาก Gemini ต่อท้าย fallback โดยปิดบัง key และ token ก่อนส่งเข้า Discord
 - แจ้งเข้า ออก และย้ายห้องเสียง รวมถึงเปลี่ยนสถานะไมค์ หูฟัง และเริ่ม–หยุดสตรีม
 - แสดงชื่อสมาชิก ชื่อห้อง และเวลาไทย (`Asia/Bangkok`) ใน Embed โดยไม่ ping สมาชิก
+- ใช้เซิร์ฟเวอร์ของ `VOICE_LOG_CHANNEL_ID` เป็นเซิร์ฟเวอร์หลัก เหตุการณ์จากเซิร์ฟเวอร์อื่นจะต่อท้ายชื่อห้อง เช่น `General` (เซิร์ฟเวอร์: Friends) ทั้งห้องต้นทางและปลายทางเมื่อย้ายห้อง
 - ระยะเวลาอยู่ในห้องและระยะเวลาสตรีมแสดง `Coming soon` จนกว่าจะมีระบบเก็บเวลาเริ่มข้ามรีสตาร์ต
 - ละเว้นการเปลี่ยนสถานะกล้องที่ไม่เกี่ยวกับสตรีม
 - ละเว้นบัญชีบอท
@@ -23,7 +24,7 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 คัดลอก `.env.example` เป็น `.env` แล้วกำหนดค่าต่อไปนี้:
 
 - `DISCORD_TOKEN` — token ของ Discord bot
-- `VOICE_LOG_CHANNEL_ID` — ID ของห้องสำหรับ voice log
+- `VOICE_LOG_CHANNEL_ID` — ID ของช่องในเซิร์ฟเวอร์หลักสำหรับรวม voice log จากทุกเซิร์ฟเวอร์ บอทต้องเข้าถึงช่องและมีสิทธิ์ส่งข้อความและ Embed
 - `PAT_CHAT_CHANNEL_ID` — ID ของห้องเดียวที่แพทจะอ่านและตอบข้อความ
 - `GEMINI_API_KEY` — API key จาก Google AI Studio
 - `GEMINI_MODEL` — โมเดล Gemini เช่น `gemini-flash-latest`

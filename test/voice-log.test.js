@@ -11,14 +11,17 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   const listeners = new Map();
   let clientOptions;
   let fetchCount = 0;
+  const fetchedChannelIds = [];
   class Client {
     constructor(options) { clientOptions = options; }
     application = { commands: {} };
     channels = {
-      fetch: async () => {
+      fetch: async (id) => {
         fetchCount++;
+        fetchedChannelIds.push(id);
         if (fetchError) throw fetchError;
         return {
+          guildId: 'primary-guild',
           isTextBased: () => true,
           isSendable: () => sendable,
           send: async (message) => {
@@ -75,7 +78,7 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
     console: { log() {}, error: (...args) => errors.push(args.join(' ')) },
   });
   return {
-    messages, errors,
+    messages, errors, fetchedChannelIds,
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
     emitReady: () => listeners.get('ready')({
@@ -87,8 +90,9 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   };
 }
 
-function state(channelId, { bot = false, selfMute = false, selfDeaf = false, streaming = false } = {}) {
+function state(channelId, { bot = false, selfMute = false, selfDeaf = false, streaming = false, guildId = 'primary-guild', guildName = 'Primary' } = {}) {
   return {
+    guild: { id: guildId, name: guildName },
     channelId, channel: channelId && { name: channelId === 'voice' ? 'General' : 'Gaming' },
     selfMute, selfDeaf, streaming,
     member: { id: 'user', displayName: 'Pat', user: { bot } },
@@ -125,6 +129,29 @@ test('logs a channel move with both channel names', async () => {
   await app.emit(state('voice'), state('gaming'));
   assert.equal(log(app).title, '🔄 Voice Moved');
   assert.equal(log(app).description, '> 👤 **User:** Pat\n> 📤 **From:** `General`\n> 📥 **To:** `Gaming`\n> 🕒 **Time:** 19:35:24');
+});
+
+test('routes external guild events to the primary log channel and labels every room', async () => {
+  const app = setup();
+  const external = { guildId: 'other-guild', guildName: 'Friends' };
+  await app.emit(state(null, external), state('voice', external));
+  await app.emit(state('voice', external), state('gaming', { ...external, selfMute: true, selfDeaf: true, streaming: true }));
+  await app.emit(state('voice', { ...external, streaming: true }), state('voice', external));
+  await app.emit(state('voice', external), { channelId: null, member: null });
+  assert.equal(app.messages.length, 7);
+  assert.deepEqual(app.fetchedChannelIds, ['log', 'log', 'log', 'log']);
+  for (const message of app.messages) {
+    const roomLines = message.embeds[0].description.split('\n').filter(line => /\*\*(Channel|From|To):\*\*/.test(line));
+    assert.ok(roomLines.length > 0);
+    for (const line of roomLines) assert.match(line, /\(เซิร์ฟเวอร์: Friends\)$/);
+  }
+});
+
+test('keeps external guild names on one line without active markdown', async () => {
+  const app = setup();
+  const external = { guildId: 'other-guild', guildName: '**Friends**\nRoom' };
+  await app.emit(state(null, external), state('voice', external));
+  assert.ok(log(app).description.includes('(เซิร์ฟเวอร์: \\*\\*Friends\\*\\* Room)'));
 });
 
 for (const [name, before, after, title, status] of [

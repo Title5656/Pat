@@ -9,8 +9,10 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
   const messages = [];
   const errors = [];
   const listeners = new Map();
+  const commandRegistrations = [];
   let fetchCount = 0;
   class Client {
+    application = { commands: {} };
     channels = {
       fetch: async () => {
         fetchCount++;
@@ -25,22 +27,61 @@ function setup({ sendable = true, fetchError, sendError } = {}) {
         };
       },
     };
-    once() {}
+    once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
     login() { return Promise.resolve(); }
   }
   vm.runInNewContext(source, {
-    require: () => ({
-      Client,
-      GatewayIntentBits: { Guilds: 1, GuildVoiceStates: 2 },
-      Events: { ClientReady: 'ready', VoiceStateUpdate: 'voice' },
-    }),
-    process: { env: { DISCORD_TOKEN: 'test-token', VOICE_LOG_CHANNEL_ID: 'log' } },
+    require: (id) => {
+      if (id === 'discord.js') {
+        return {
+          Client,
+          GatewayIntentBits: { Guilds: 1, GuildVoiceStates: 2 },
+          Events: {
+            ClientReady: 'ready',
+            InteractionCreate: 'interaction',
+            VoiceStateUpdate: 'voice',
+          },
+        };
+      }
+      if (id === './src/chat/command') {
+        return {
+          registerPatCommand: async (application, guildId) => {
+            commandRegistrations.push([application, guildId]);
+          },
+        };
+      }
+      if (id === './src/chat/memory') return { createMemory: () => ({ memory: true }) };
+      if (id === './src/chat/conversation') {
+        return { createConversation: () => ({ conversation: true }) };
+      }
+      if (id === './src/chat/gemini-client') {
+        return { createGeminiGenerator: () => async () => 'answer' };
+      }
+      if (id === './src/chat/handle-pat') {
+        return { createPatHandler: () => async () => {} };
+      }
+      throw new Error(`Unexpected require: ${id}`);
+    },
+    process: {
+      env: {
+        DISCORD_TOKEN: 'test-token',
+        DISCORD_GUILD_ID: 'guild',
+        VOICE_LOG_CHANNEL_ID: 'log',
+        GEMINI_API_KEY: 'key',
+        GEMINI_MODEL: 'model',
+      },
+    },
     console: { log() {}, error: (...args) => errors.push(args.join(' ')) },
   });
   return {
-    messages, errors,
+    messages, errors, commandRegistrations,
     get fetchCount() { return fetchCount; },
+    emitReady: () => listeners.get('ready')({
+      application: { commands: {} },
+      user: { tag: 'Pat#0001' },
+    }),
+    hasListener: (event) => listeners.has(event),
     emit: (oldState, newState) => listeners.get('voice')(oldState, newState),
   };
 }
@@ -95,4 +136,14 @@ test('handles send failures without rejecting the event', async () => {
   const app = setup({ sendError: new Error('missing permissions') });
   await app.emit(state(null), state('a'));
   assert.match(app.errors.join('\n'), /missing permissions/);
+});
+
+test('registers /pat on ready and binds the interaction listener', async () => {
+  const app = setup();
+
+  assert.equal(app.hasListener('interaction'), true);
+  await app.emitReady();
+
+  assert.equal(app.commandRegistrations.length, 1);
+  assert.equal(app.commandRegistrations[0][1], 'guild');
 });

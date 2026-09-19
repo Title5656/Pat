@@ -1,7 +1,7 @@
 {
   "name": "pat",
   "version": "0.1.0",
-  "description": "Minimal Discord Voice Join/Leave Logger",
+  "description": "Discord voice logger and Gemini-powered Pat chatbot",
   "main": "index.js",
   "private": true,
   "engines": {
@@ -9,10 +9,11 @@
   },
   "scripts": {
     "start": "node --env-file=.env index.js",
-    "check": "node --check index.js",
+    "check": "node --check index.js && node --check src/chat/command.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-pat.js",
     "test": "node --test"
   },
   "dependencies": {
+    "@google/genai": "^2.23.0",
     "discord.js": "^14.18.0"
   }
 }

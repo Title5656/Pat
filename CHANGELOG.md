@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the `/pat` guild command backed by Gemini with Pat's Thai character prompt.
+- Keep the latest 12 conversation messages in memory per Discord channel.
+- Return a friendly fallback when Gemini fails and preserve the existing voice logger.
 - Update bot branding, package metadata, and repository documentation to Pat (แพท).
 - Configure the Render keepalive URL through the `RENDER_SERVICE_URL` repository Actions variable.
 - Align package and lockfile metadata at version 0.1.0; keep dependency versions unchanged.

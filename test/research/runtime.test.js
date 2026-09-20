@@ -6,7 +6,7 @@ const { setImmediate: nextTurn } = require('node:timers/promises');
 const { createStore } = require('../../src/research/store');
 const { createRuntime } = require('../../src/research/runtime');
 
-function fixture() {
+function fixture(overrides = {}) {
   const client = new EventEmitter();
   client.user = { id: 'pat' };
   client.isReady = () => true;
@@ -20,12 +20,44 @@ function fixture() {
     permissionsFor: subject => new PermissionsBitField(subject.id === '10' ? [] : [P.ViewChannel, P.ReadMessageHistory, P.SendMessages]) };
   client.channels = { fetch: async () => qa };
   const store = createStore(':memory:');
-  const source = { discover: async () => [], canRead: c => c.id !== '99', record: m => ({ id: m.id, channelId: m.channelId, guildId: m.guildId, guildName: 'Friends', channelName: 'general', content: m.content, authorId: '30', authorName: 'Alice', createdAt: 1700000000000 }) };
-  const config = { qaChannelId: '99', pagesPerChannel: 1, syncIntervalMs: 60000 };
-  const runtime = createRuntime({ client, store, source, config, model: {}, logger: { warn() {}, log() {} } });
+  const source = { discover: async () => [], canRead: c => c.id !== '99', record: m => ({ id: m.id, channelId: m.channelId, guildId: m.guildId, guildName: 'Friends', channelName: 'general', content: m.content, authorId: '30', authorName: 'Alice', createdAt: 1700000000000 }),
+    ...overrides.source };
+  const config = { qaChannelId: '99', pagesPerChannel: 1, syncIntervalMs: 60000, ...overrides.config };
+  const runtime = createRuntime({ client, store, source, config, model: overrides.model ?? {}, logger: { warn() {}, log() {} } });
   const message = { id: '100', guildId: '10', channelId: '20', channel: { id: '20' }, author: { id: '30' }, content: 'pizza' };
   return { client, store, runtime, message, qa };
 }
+
+test('runtime passes the configured context window into answer retrieval', async () => {
+  let receivedWindow;
+  const target = { id: '100', channelId: '20', guildId: '10', guildName: 'Friends', channelName: 'general',
+    content: 'pizza at six', authorId: '30', authorName: 'Alice', createdAt: 1700000000000 };
+  const { client, store, runtime, qa } = fixture({
+    config: { contextBefore: 1, contextAfter: 4 },
+    source: {
+      refresh: async () => target,
+      readContext: async (_item, options) => {
+        receivedWindow = { before: options.before, after: options.after };
+        return { contextBefore: [], contextAfter: [] };
+      },
+    },
+    model: {
+      plan: async () => ['pizza'],
+      answer: async () => ({ answer: 'หกโมง [1]', sourceIds: [1] }),
+    },
+  });
+  const sent = [];
+  qa.sendTyping = async () => {};
+  qa.send = async payload => sent.push(payload);
+  try {
+    store.upsert(target);
+    await runtime.start();
+    client.emit(Events.MessageCreate, { id: '200', guildId: '10', channelId: '99', channel: qa,
+      author: { id: 'owner', bot: false }, content: 'pizza กี่โมง' });
+    for (let attempt = 0; attempt < 10 && !sent.length; attempt++) await nextTurn();
+    assert.deepEqual(receivedWindow, { before: 1, after: 4 });
+  } finally { await runtime.stop(); }
+});
 
 test('live create, edit, delete and bulk delete events update the independent search index', async () => {
   const { client, store, runtime, message } = fixture();

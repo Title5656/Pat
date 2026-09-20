@@ -10,12 +10,22 @@ test('research configuration ignores obsolete second-bot credentials and resolve
   assert.equal(config.token, undefined);
   assert.equal(config.geminiApiKey, 'existing-key');
   assert.equal(config.databasePath, resolve('/pat', 'data', 'research.sqlite'));
+  assert.equal(config.contextBefore, 2);
+  assert.equal(config.contextAfter, 2);
 });
 
 test('enabled research rejects missing API keys, malformed IDs and invalid limits', () => {
   assert.throws(() => loadConfig({ ...env, GEMINI_API_KEY: '' }), /GEMINI_API_KEY/);
   assert.throws(() => loadConfig({ ...env, PAT_RESEARCH_CHANNEL_ID: 'not-an-id' }), /PAT_RESEARCH_CHANNEL_ID/);
   assert.throws(() => loadConfig({ ...env, PAT_RESEARCH_PAGES_PER_CHANNEL: '0' }), /PAT_RESEARCH_PAGES_PER_CHANNEL/);
+  assert.throws(() => loadConfig({ ...env, PAT_RESEARCH_CONTEXT_BEFORE: '-1' }), /PAT_RESEARCH_CONTEXT_BEFORE/);
+  assert.throws(() => loadConfig({ ...env, PAT_RESEARCH_CONTEXT_AFTER: '11' }), /PAT_RESEARCH_CONTEXT_AFTER/);
+});
+
+test('conversation context window can be configured independently in each direction', () => {
+  const config = loadConfig({ ...env, PAT_RESEARCH_CONTEXT_BEFORE: '1', PAT_RESEARCH_CONTEXT_AFTER: '4' }, '/pat');
+  assert.equal(config.contextBefore, 1);
+  assert.equal(config.contextAfter, 4);
 });
 
 test('a mounted database path can be selected without moving the application', () => {

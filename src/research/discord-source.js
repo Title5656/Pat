@@ -1,15 +1,17 @@
 const { ChannelType: T, PermissionFlagsBits: P } = require('discord.js');
+const { RESEARCH_LIMITS } = require('./limits');
 
 const messageTypes = new Set([T.GuildText, T.GuildAnnouncement, T.PublicThread, T.PrivateThread, T.AnnouncementThread]);
 const goneCodes = new Set([10003, 10004, 10008, 50001, 50013]);
 
 function createDiscordSource({ client, qaChannelId, logger = console }) {
   function canRead(channel) {
-    return Boolean(channel?.guild && channel.id !== qaChannelId
+    return Boolean(channel?.guild && channel.id !== qaChannelId && channel.parentId !== qaChannelId
       && channel.permissionsFor(channel.guild.members.me)?.has([P.ViewChannel, P.ReadMessageHistory]));
   }
   function record(message) {
-    const content = message.author?.id === client.user.id || message.channelId === qaChannelId ? '' : (message.content ?? '');
+    const content = message.author?.id === client.user.id || message.channelId === qaChannelId
+      || message.channel?.parentId === qaChannelId ? '' : (message.content ?? '');
     return {
       id: message.id, guildId: message.guildId, channelId: message.channelId,
       guildName: message.guild.name, channelName: message.channel.name,
@@ -17,6 +19,20 @@ function createDiscordSource({ client, qaChannelId, logger = console }) {
       authorName: message.member?.displayName ?? message.author?.globalName ?? message.author?.username ?? 'Unknown',
       content, createdAt: message.createdTimestamp,
     };
+  }
+  function contextCount(value, fallback) {
+    if (!Number.isInteger(value)) return fallback;
+    return Math.max(0, Math.min(RESEARCH_LIMITS.maxContextMessages, value));
+  }
+  function contextRecords(messages, channelId, targetId) {
+    return [...messages.values()].map(record)
+      .filter(item => item.channelId === channelId && item.id !== targetId && item.content.trim())
+      .sort((a, b) => {
+        const time = a.createdAt - b.createdAt;
+        if (time) return time;
+        try { return BigInt(a.id) < BigInt(b.id) ? -1 : BigInt(a.id) > BigInt(b.id) ? 1 : 0; }
+        catch { return a.id.localeCompare(b.id); }
+      });
   }
   const source = {
     discoveryErrors: 0,
@@ -134,6 +150,40 @@ function createDiscordSource({ client, qaChannelId, logger = console }) {
         signal?.throwIfAborted();
         const current = record(message);
         return current.content.trim() ? current : null;
+      } catch (error) {
+        if (goneCodes.has(error.code)) return null;
+        throw error;
+      }
+    },
+    async readContext(target, { before = RESEARCH_LIMITS.contextBefore,
+      after = RESEARCH_LIMITS.contextAfter, signal } = {}) {
+      signal?.throwIfAborted();
+      if (target.channelId === qaChannelId || !client.guilds.cache.has(target.guildId)) return null;
+      try {
+        const channel = await client.channels.fetch(target.channelId, { force: true });
+        signal?.throwIfAborted();
+        if (!canRead(channel) || !messageTypes.has(channel.type)) return null;
+        const beforeLimit = contextCount(before, RESEARCH_LIMITS.contextBefore);
+        const afterLimit = contextCount(after, RESEARCH_LIMITS.contextAfter);
+        const beforeMessages = beforeLimit
+          ? await channel.messages.fetch({ limit: beforeLimit, before: target.id, cache: false })
+          : new Map();
+        signal?.throwIfAborted();
+        const afterMessages = afterLimit
+          ? await channel.messages.fetch({ limit: afterLimit, after: target.id, cache: false })
+          : new Map();
+        signal?.throwIfAborted();
+        if (!canRead(channel)) return null;
+        const finalMessage = await channel.messages.fetch({ message: target.id, force: true, cache: false });
+        signal?.throwIfAborted();
+        if (!canRead(channel)) return null;
+        const finalTarget = record(finalMessage);
+        if (!finalTarget.content.trim()) return null;
+        return {
+          target: finalTarget,
+          contextBefore: contextRecords(beforeMessages, target.channelId, target.id),
+          contextAfter: contextRecords(afterMessages, target.channelId, target.id),
+        };
       } catch (error) {
         if (goneCodes.has(error.code)) return null;
         throw error;

@@ -1,4 +1,5 @@
 const { parseCommand } = require('./commands');
+const { RESEARCH_LIMITS } = require('./limits');
 
 const NO_EVIDENCE = 'ไม่พบข้อความที่เกี่ยวข้องและตรวจสอบได้ในข้อมูลที่ค้นครั้งนี้ ลองระบุชื่อคน ห้อง เซิร์ฟเวอร์ หรือคำสำคัญเพิ่มครับ';
 const FAILURE = 'ระบบค้นหาหรือตอบคำถามขัดข้องชั่วคราว ลองใหม่อีกครั้งครับ';
@@ -28,7 +29,9 @@ function exactMatches(items, name, field = 'name') {
   return items.filter(item => normalized(item[field]) === normalized(name));
 }
 
-function createAssistant({ store, source, model, qaChannelId, status, logger = console, authorizeOutput = async () => {} }) {
+function createAssistant({ store, source, model, qaChannelId, status, logger = console, authorizeOutput = async () => {},
+  contextBefore = RESEARCH_LIMITS.contextBefore, contextAfter = RESEARCH_LIMITS.contextAfter,
+  contextTimeoutMs = RESEARCH_LIMITS.contextTimeoutMs }) {
   const histories = new Map();
   const sessions = new Map();
   const generations = new Map();
@@ -39,7 +42,7 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
   let pending = 0;
   let stopped = false;
 
-  function waitFor(value, token, timeoutMs = 60000) {
+  function waitFor(value, token, timeoutMs = 60000, abortOnTimeout = () => token?.controller.abort()) {
     return new Promise((resolve, reject) => {
       let settled = false;
       let operationSettled = false;
@@ -60,7 +63,7 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
       };
       const cancel = () => finish(reject, Object.assign(new Error('Command reset'), { code: 'RESET' }), true);
       const timeout = setTimeout(() => {
-        token?.controller.abort();
+        abortOnTimeout?.();
         finish(reject, Object.assign(new Error('Operation timed out'), { code: 'TIMEOUT' }), true);
       }, timeoutMs);
       timeout.unref?.();
@@ -315,11 +318,56 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
         }
         if (store.search(queries, 90).filter(item => verified.has(item.id)).length >= 6) break;
       }
-      const sources = store.search(queries, 90).filter(item => verified.has(item.id)).slice(0, 6)
+      const targets = store.search(queries, 90).filter(item => verified.has(item.id)).slice(0, 6)
         .map(item => verified.get(item.id));
-      if (!sources.length) {
+      if (!targets.length) {
         await send(message, `${failures ? 'ตรวจสอบข้อความต้นทางกับ Discord ไม่สำเร็จ จึงยังสรุปไม่ได้ครับ' : NO_EVIDENCE}\n\n${coverage()}`,
           () => alive(key, generation, token), token);
+        return;
+      }
+      const targetIds = new Set(targets.map(item => item.id));
+      const usedContextIds = new Set();
+      const sources = [];
+      const uniqueContext = items => {
+        const unique = [];
+        for (const item of Array.isArray(items) ? items : []) {
+          if (!item?.id || targetIds.has(item.id) || usedContextIds.has(item.id)) continue;
+          usedContextIds.add(item.id);
+          unique.push(item);
+        }
+        return unique;
+      };
+      for (const target of targets) {
+        let finalTarget = target;
+        let context = { contextBefore: [], contextAfter: [] };
+        if (typeof source.readContext === 'function') {
+          const contextController = new AbortController();
+          try {
+            context = await waitFor(source.readContext(target, {
+              before: contextBefore, after: contextAfter,
+              signal: AbortSignal.any([token.controller.signal, contextController.signal]),
+            }), token, contextTimeoutMs, () => contextController.abort());
+            if (!alive(key, generation, token)) return;
+            if (!context) {
+              store.deleteMessage(target.id);
+              continue;
+            }
+            if (context.target) {
+              if (context.target.id !== target.id || context.target.channelId !== target.channelId
+                || context.target.guildId !== target.guildId) throw new Error('Context target identity changed');
+              finalTarget = context.target;
+              store.upsert(finalTarget);
+            }
+          } catch (error) {
+            if (error.code === 'RESET' || token.controller.signal.aborted) throw error;
+            logger.warn(`Context expansion failed; code=${error.code ?? error.name ?? 'unknown'}`);
+          }
+        }
+        sources.push({ target: finalTarget, contextBefore: uniqueContext(context.contextBefore),
+          contextAfter: uniqueContext(context.contextAfter) });
+      }
+      if (!sources.length) {
+        await send(message, `${NO_EVIDENCE}\n\n${coverage()}`, () => alive(key, generation, token), token);
         return;
       }
       const result = await waitFor(model.answer({ question, history, sources, signal: token.controller.signal }), token);
@@ -338,7 +386,7 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
         return;
       }
       const links = ids.map(id => {
-        const item = sources[id - 1];
+        const item = sources[id - 1].target;
         const date = new Date(item.createdAt).toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', hour12: false });
         return `[${id}] ${label(item.guildName)} / #${label(item.channelName)} · ${label(item.authorName)} · ${date} (ไทย)\n`
           + `https://discord.com/channels/${item.guildId}/${item.channelId}/${item.id}`;

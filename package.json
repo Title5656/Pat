@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env index.js",
-    "check": "node --check index.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-message.js && node --check src/research/feature.js && node --check src/research/config.js && node --check src/research/store.js && node --check src/research/discord-source.js && node --check src/research/indexer.js && node --check src/research/persona.js && node --check src/research/gemini.js && node --check src/research/assistant.js && node --check src/research/runtime.js",
+    "check": "node --check index.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-message.js && node --check src/research/feature.js && node --check src/research/config.js && node --check src/research/store.js && node --check src/research/discord-source.js && node --check src/research/indexer.js && node --check src/research/persona.js && node --check src/research/gemini.js && node --check src/research/commands.js && node --check src/research/assistant.js && node --check src/research/runtime.js",
     "test": "node --test"
   },
   "dependencies": {

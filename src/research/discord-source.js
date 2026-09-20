@@ -22,6 +22,46 @@ function createDiscordSource({ client, qaChannelId, logger = console }) {
     discoveryErrors: 0,
     canRead,
     record,
+    async listGuilds({ signal } = {}) {
+      signal?.throwIfAborted();
+      return [...client.guilds.cache.values()]
+        .map(guild => ({ id: guild.id, name: guild.name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'th'));
+    },
+    async listChannels(guildId, { signal } = {}) {
+      signal?.throwIfAborted();
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) return [];
+      const channels = await guild.channels.fetch();
+      signal?.throwIfAborted();
+      return [...channels.values()].filter(channel => channel && canRead(channel)
+          && (channel.type === T.GuildText || channel.type === T.GuildAnnouncement))
+        .map(channel => ({ id: channel.id, guildId: guild.id, guildName: guild.name,
+          name: channel.name, type: channel.type }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'th'));
+    },
+    async readMessages(channelId, { before, limit = 50, signal } = {}) {
+      signal?.throwIfAborted();
+      const channel = await client.channels.fetch(channelId, { force: true });
+      signal?.throwIfAborted();
+      if (!canRead(channel) || !messageTypes.has(channel.type)) return [];
+      const wanted = Math.max(1, Math.min(100, limit));
+      const found = [];
+      let cursor = before;
+      while (found.length < wanted) {
+        const batchLimit = wanted - found.length;
+        const options = { limit: batchLimit, cache: false };
+        if (cursor) options.before = cursor;
+        const messages = [...(await channel.messages.fetch(options)).values()];
+        signal?.throwIfAborted();
+        found.push(...messages.map(record).filter(item => item.content.trim()));
+        if (messages.length < batchLimit || !messages.length) break;
+        const next = messages.at(-1).id;
+        if (next === cursor) break;
+        cursor = next;
+      }
+      return found.slice(0, wanted);
+    },
     async discover() {
       source.discoveryErrors = 0;
       const found = new Map();
@@ -69,12 +109,15 @@ function createDiscordSource({ client, qaChannelId, logger = console }) {
       const messages = await channel.messages.fetch({ limit: 100, before, cache: false });
       return [...messages.values()].map(record);
     },
-    async refresh(indexed) {
+    async refresh(indexed, { signal } = {}) {
+      signal?.throwIfAborted();
       if (indexed.channelId === qaChannelId || !client.guilds.cache.has(indexed.guildId)) return null;
       try {
         const channel = await client.channels.fetch(indexed.channelId, { force: true });
+        signal?.throwIfAborted();
         if (!canRead(channel) || !messageTypes.has(channel.type)) return null;
         const message = await channel.messages.fetch({ message: indexed.id, force: true, cache: false });
+        signal?.throwIfAborted();
         const current = record(message);
         return current.content.trim() ? current : null;
       } catch (error) {

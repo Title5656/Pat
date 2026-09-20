@@ -65,3 +65,66 @@ test('discovery includes paginated archived threads and isolates failures by gui
   assert.deepEqual((await source.discover()).map(c => c.id).sort(), ['20', '21', '22']);
   assert.equal(source.discoveryErrors, 1);
 });
+
+test('read-only catalog lists readable text channels without exposing the Q&A room', async () => {
+  const { client, channel, guild } = fixture();
+  const hidden = { ...channel, id: '30', name: 'hidden', permissionsFor: () => new PermissionsBitField([]) };
+  const voice = { ...channel, id: '40', name: 'voice', type: ChannelType.GuildVoice };
+  const qa = { ...channel, id: '99', name: 'research' };
+  guild.channels = { fetch: async () => new Map([
+    ['20', channel], ['30', hidden], ['40', voice], ['99', qa],
+  ]) };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+
+  assert.deepEqual(await source.listGuilds(), [{ id: '10', name: 'Friends' }]);
+  assert.deepEqual(await source.listChannels('10'), [{
+    id: '20', guildId: '10', guildName: 'Friends', name: 'general', type: ChannelType.GuildText,
+  }]);
+  assert.equal(source.deleteMessage, undefined);
+  assert.equal(source.deleteChannel, undefined);
+});
+
+test('message pages are read live without mutating the source channel', async () => {
+  const { client, channel } = fixture();
+  const second = { ...(await channel.messages.fetch({ force: true, cache: false })), id: '101', content: 'second', createdTimestamp: 1700000001000 };
+  let received;
+  channel.messages.fetch = async options => {
+    received = options;
+    return new Map([['101', second], ['100', { ...second, id: '100', content: 'first', createdTimestamp: 1700000000000 }]]);
+  };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+  const page = await source.readMessages('20', { before: '200', limit: 50 });
+
+  assert.deepEqual(received, { limit: 50, before: '200', cache: false });
+  assert.deepEqual(page.map(item => [item.id, item.authorName, item.content]), [
+    ['101', 'Alice', 'second'], ['100', 'Alice', 'first'],
+  ]);
+});
+
+test('message pages continue past empty records until the requested text count is filled', async () => {
+  const { client, channel, message } = fixture();
+  const calls = [];
+  channel.messages.fetch = async options => {
+    calls.push(options);
+    if (!options.before) {
+      return new Map([
+        ['105', { ...message, id: '105', content: '' }],
+        ['104', { ...message, id: '104', content: 'four' }],
+        ['103', { ...message, id: '103', content: '' }],
+      ]);
+    }
+    return new Map([
+      ['102', { ...message, id: '102', content: 'two' }],
+      ['101', { ...message, id: '101', content: 'one' }],
+    ]);
+  };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+
+  const page = await source.readMessages('20', { limit: 3 });
+
+  assert.deepEqual(page.map(item => item.content), ['four', 'two', 'one']);
+  assert.deepEqual(calls, [
+    { limit: 3, cache: false },
+    { limit: 2, cache: false, before: '103' },
+  ]);
+});

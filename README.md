@@ -7,7 +7,7 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 ## การทำงานหลัก
 
 - พิมพ์คุยหรือส่งรูปขนาดไม่เกิน 10 MB ให้แพทวิเคราะห์ได้ในห้องที่กำหนดด้วย `PAT_CHAT_CHANNEL_ID`
-- เปิดห้องค้นข้อมูลเพิ่มด้วย `PAT_RESEARCH_CHANNEL_ID`: Pat ตัวเดิมใช้ persona ตอบตามหลักฐาน ค้นข้อความข้ามเซิร์ฟเวอร์ พร้อมลิงก์ต้นทาง
+- เปิดห้องค้นข้อมูลเพิ่มด้วย `PAT_RESEARCH_CHANNEL_ID`: Pat ตัวเดิมใช้ persona ตอบตามหลักฐาน ค้นข้อความข้ามเซิร์ฟเวอร์ พร้อมลิงก์ต้นทาง รวมถึงดูรายชื่อห้องและอ่านข้อความจริงแบบแบ่งชุดได้
 - ห้องคุยเดิมและห้องค้นข้อมูลแยก persona และความจำกัน; ไม่ตอบข้อความในห้องอื่นหรือจากบัญชีบอท
 - จำบทสนทนา 12 ข้อความล่าสุดแยกตามห้องระหว่างที่โปรเซสทำงาน
 - ตอบด้วยภาษาไทยและคงคาแรกเตอร์เอ๋อแบบน่ารัก โดยยังรักษาความถูกต้องของสาระหลัก
@@ -39,6 +39,8 @@ PAT_RESEARCH_CHANNEL_ID=ใส่_ID_ห้องค้นข้อมูล
 ```
 
 ห้องค้นข้อมูลต้องเป็น private และคนละห้องกับ `PAT_CHAT_CHANNEL_ID` สมาชิกทุกคนที่ Discord อนุญาตให้เห็นห้องสามารถถามได้ ใช้ `DISCORD_TOKEN`, `GEMINI_API_KEY`, `GEMINI_MODEL` และ service เดิมทั้งหมด ไม่ต้องสร้าง Discord Application ใหม่ ไม่ต้องใช้ค่า `RESEARCH_DISCORD_TOKEN`, `RESEARCH_APPLICATION_ID` หรือ `RESEARCH_GEMINI_API_KEY` แล้ว หากเว้น `PAT_RESEARCH_CHANNEL_ID` ว่าง ฟีเจอร์นี้จะปิดและ Pat ทำงานตามเดิม
+
+คำสั่งในห้องค้นข้อมูลเป็นแบบ read-only ต่อทุกเซิร์ฟเวอร์: อ่านรายชื่อห้อง อ่านข้อความ และค้นหาได้ แต่ไม่ลบ แก้ไข สร้างห้อง หรือเปลี่ยนสิทธิ์บน Discord คำสั่ง `!reset` ล้างเฉพาะ session ชั่วคราวของผู้สั่ง ไม่กระทบเซิร์ฟเวอร์หรือผู้ใช้คนอื่น
 
 บน Render ใช้ root directory ของ repo เดิม, build `npm ci`, start `npm start`, Node 24 และ health path `/health` หากต้องการเก็บดัชนีข้าม redeploy ให้แนบ persistent disk แล้วตั้ง `PAT_RESEARCH_DATABASE_PATH=/var/data/research.sqlite` ดู [วิธีตั้งห้องและขอบเขตการค้น](docs/research.md)
 

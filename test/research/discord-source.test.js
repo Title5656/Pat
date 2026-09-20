@@ -49,6 +49,108 @@ test('transient Discord errors do not masquerade as deleted sources', async () =
   await assert.rejects(source.refresh({ id: '100', channelId: '20', guildId: '10' }), /timeout/);
 });
 
+test('context reads chronological neighbors from only the target thread and filters unusable records', async () => {
+  const { client, channel, message } = fixture();
+  const thread = { ...channel, id: '21', name: 'meal-plan', type: ChannelType.PublicThread };
+  const requests = [];
+  thread.messages = { fetch: async options => {
+    requests.push(options);
+    if (options.message) return { ...message, id: '100', channelId: '21', channel: thread,
+      content: 'edited target', createdTimestamp: 1700000002000 };
+    if (options.before) return new Map([
+      ['99', { ...message, id: '99', channelId: '21', channel: thread, content: 'ก่อนหนึ่ง', createdTimestamp: 1700000000000 }],
+      ['98', { ...message, id: '98', channelId: '21', channel: thread, content: 'ก่อนสอง', createdTimestamp: 1700000000000 }],
+    ]);
+    return new Map([
+      ['102', { ...message, id: '102', channelId: '21', channel: thread, content: 'หลังสอง', createdTimestamp: 1700000004000 }],
+      ['101', { ...message, id: '101', channelId: '21', channel: thread, content: 'หลังหนึ่ง', createdTimestamp: 1700000003000 }],
+      ['103', { ...message, id: '103', channelId: '21', channel: thread,
+        author: { id: 'bot', username: 'Pat' }, content: 'bot output', createdTimestamp: 1700000005000 }],
+    ]);
+  } };
+  const fetchedChannels = [];
+  client.channels.fetch = async id => { fetchedChannels.push(id); return thread; };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+
+  const context = await source.readContext({ ...source.record(message), id: '100', channelId: '21' }, { before: 2, after: 3 });
+
+  assert.deepEqual(fetchedChannels, ['21']);
+  assert.deepEqual(requests, [
+    { limit: 2, before: '100', cache: false },
+    { limit: 3, after: '100', cache: false },
+    { message: '100', force: true, cache: false },
+  ]);
+  assert.equal(context.target.content, 'edited target');
+  assert.deepEqual(context.contextBefore.map(item => item.content), ['ก่อนสอง', 'ก่อนหนึ่ง']);
+  assert.deepEqual(context.contextAfter.map(item => item.content), ['หลังหนึ่ง', 'หลังสอง']);
+  assert.ok([...context.contextBefore, ...context.contextAfter].every(item => item.channelId === '21'));
+});
+
+test('context access loss discards the evidence unit instead of exposing target-only data', async () => {
+  const { client, channel } = fixture();
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+  channel.permissionsFor = () => new PermissionsBitField([]);
+  assert.equal(await source.readContext({ id: '100', channelId: '20', guildId: '10' }), null);
+
+  channel.permissionsFor = () => new PermissionsBitField([P.ViewChannel, P.ReadMessageHistory]);
+  channel.messages.fetch = async () => { throw Object.assign(new Error('forbidden'), { code: 50013 }); };
+  assert.equal(await source.readContext({ id: '100', channelId: '20', guildId: '10' }), null);
+  assert.equal(await source.readContext({ id: '100', channelId: '99', guildId: '10' }), null);
+
+  channel.parentId = '99';
+  channel.messages.fetch = async () => { throw new Error('must not read a thread under the Q&A channel'); };
+  assert.equal(await source.readContext({ id: '100', channelId: '20', guildId: '10' }), null);
+});
+
+test('context reads propagate transient failures and cancellation for graceful caller fallback', async () => {
+  const { client, channel } = fixture();
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+  channel.messages.fetch = async () => { throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }); };
+  await assert.rejects(source.readContext({ id: '100', channelId: '20', guildId: '10' }), /timeout/);
+
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(source.readContext({ id: '100', channelId: '20', guildId: '10' }, { signal: controller.signal }), { name: 'AbortError' });
+});
+
+test('a deleted surrounding message simply reduces the live context window', async () => {
+  const { client, channel, message } = fixture();
+  channel.messages.fetch = async options => {
+    if (options.message) return message;
+    return options.before
+      ? new Map([['99', { ...message, id: '99', content: 'still present', createdTimestamp: 1699999999000 }]])
+      : new Map();
+  };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+
+  const context = await source.readContext({ id: '100', channelId: '20', guildId: '10' }, { before: 2, after: 2 });
+
+  assert.deepEqual(context.contextBefore.map(item => item.id), ['99']);
+  assert.deepEqual(context.contextAfter, []);
+});
+
+test('final context revalidation drops targets deleted or made inaccessible during expansion', async () => {
+  const deleted = fixture();
+  deleted.channel.messages.fetch = async options => {
+    if (options.message) throw Object.assign(new Error('deleted'), { code: 10008 });
+    return new Map();
+  };
+  const deletedSource = createDiscordSource({ client: deleted.client, qaChannelId: '99' });
+  assert.equal(await deletedSource.readContext({ id: '100', channelId: '20', guildId: '10' }), null);
+
+  const revoked = fixture();
+  let permissionChecks = 0;
+  revoked.channel.permissionsFor = () => new PermissionsBitField(
+    permissionChecks++ < 1 ? [P.ViewChannel, P.ReadMessageHistory] : [],
+  );
+  revoked.channel.messages.fetch = async options => {
+    if (options.message) throw new Error('must not fetch inaccessible target');
+    return new Map();
+  };
+  const revokedSource = createDiscordSource({ client: revoked.client, qaChannelId: '99' });
+  assert.equal(await revokedSource.readContext({ id: '100', channelId: '20', guildId: '10' }), null);
+});
+
 test('discovery includes paginated archived threads and isolates failures by guild', async () => {
   const { client, channel, guild } = fixture();
   const thread = { ...channel, id: '21', type: ChannelType.PublicThread, isThread: () => true, archiveTimestamp: 1700000000000 };

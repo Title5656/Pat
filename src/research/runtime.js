@@ -7,7 +7,8 @@ function createRuntime({ client, store, model, config, logger = console,
   source = createDiscordSource({ client, qaChannelId: config.qaChannelId, logger }) }) {
   const indexer = createIndexer({ store, source, pagesPerChannel: config.pagesPerChannel, logger });
   const assistant = createAssistant({ store, source, model, qaChannelId: config.qaChannelId,
-    status: () => indexer.status(), logger, authorizeOutput: checkOutput });
+    status: () => indexer.status(), logger, authorizeOutput: checkOutput,
+    contextBefore: config.contextBefore, contextAfter: config.contextAfter });
   const jobs = new Set();
   const listeners = [];
   let active = false;

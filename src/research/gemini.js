@@ -1,5 +1,20 @@
 const { GoogleGenAI } = require('@google/genai');
 const { RESEARCH_PERSONA } = require('./persona');
+const { RESEARCH_LIMITS } = require('./limits');
+
+function evidenceMessage(message) {
+  return { ...message, content: String(message.content ?? '').slice(0, RESEARCH_LIMITS.maxEvidenceContentChars),
+    date: new Date(message.createdAt).toISOString() };
+}
+
+function evidenceUnit(source, index) {
+  return {
+    sourceId: index + 1,
+    target: evidenceMessage(source.target),
+    contextBefore: (source.contextBefore ?? []).slice(0, RESEARCH_LIMITS.maxContextMessages).map(evidenceMessage),
+    contextAfter: (source.contextAfter ?? []).slice(0, RESEARCH_LIMITS.maxContextMessages).map(evidenceMessage),
+  };
+}
 
 function createGeminiModel({ apiKey, model, GoogleGenAIClass = GoogleGenAI }) {
   const client = new GoogleGenAIClass({ apiKey, httpOptions: { timeout: 60000 } });
@@ -28,8 +43,7 @@ function createGeminiModel({ apiKey, model, GoogleGenAIClass = GoogleGenAI }) {
     answer({ question, history, sources, signal }) {
       return generate(RESEARCH_PERSONA, {
         question, history,
-        sources: sources.map((source, index) => ({ ...source, content: source.content.slice(0, 4000),
-          sourceId: index + 1, date: new Date(source.createdAt).toISOString() })),
+        sources: sources.map(evidenceUnit),
       }, {
         type: 'object', properties: {
           answer: { type: 'string' }, sourceIds: { type: 'array', items: { type: 'integer' }, maxItems: 6 },

@@ -8,7 +8,8 @@ function fixture(overrides = {}) {
   const sent = [];
   const store = createStore(':memory:');
   const message = { id: '200', guildId: '10', channelId: '99', author: { id: 'owner', bot: false }, content: 'หมูกระทะวันไหน', channel: { sendTyping: async () => {}, send: async payload => sent.push(payload) } };
-  const assistant = createAssistant({ store, source: { refresh: async () => evidence },
+  const assistant = createAssistant({ store, source: { refresh: async () => evidence,
+    readContext: async () => ({ contextBefore: [], contextAfter: [] }) },
     model: { plan: async () => ['หมูกระทะ'], answer: async () => ({ answer: 'วันศุกร์ครับ [1]', sourceIds: [1] }) },
     qaChannelId: '99', status: () => ({ messages: 1, channels: 1, complete: 1, errors: 0 }),
     logger: { warn() {} }, ...overrides,
@@ -60,9 +61,10 @@ test('deleted and inaccessible search hits are removed before they reach the mod
 
 test('edited text is refreshed and becomes the only evidence passed to generation', async () => {
   const updated = { ...evidence, content: 'เปลี่ยนหมูกระทะเป็นวันเสาร์' };
+  let receivedSources;
   const { assistant, store, message, sent } = fixture({ source: { refresh: async () => updated }, model: {
     plan: async () => ['หมูกระทะ'], answer: async ({ sources }) => {
-      assert.equal(sources[0].content, 'เปลี่ยนหมูกระทะเป็นวันเสาร์');
+      receivedSources = sources;
       return { answer: 'วันเสาร์ [1]', sourceIds: [1] };
     },
   } });
@@ -70,7 +72,172 @@ test('edited text is refreshed and becomes the only evidence passed to generatio
     store.upsert(evidence);
     await assistant.handle(message);
     assert.match(sent[0].content, /วันเสาร์/);
+    assert.equal(receivedSources[0].target.content, 'เปลี่ยนหมูกระทะเป็นวันเสาร์');
     assert.equal(store.search(['หมูกระทะ'])[0].content, updated.content);
+  } finally { store.close(); }
+});
+
+test('generation receives chronological surrounding messages while citations stay on the target', async () => {
+  const before = { ...evidence, id: '99', authorName: 'Bob', content: 'นัดกินข้าววันเสาร์นะ', createdAt: 1699999999000 };
+  const after = { ...evidence, id: '101', authorName: 'Alice', content: 'เจอกันหน้าร้าน', createdAt: 1700000001000 };
+  const target = { ...evidence, content: 'หมูกระทะ ได้ 18:00' };
+  const { assistant, store, message, sent } = fixture({
+    contextBefore: 1,
+    contextAfter: 1,
+    source: {
+      refresh: async () => target,
+      readContext: async (item, options) => {
+        assert.equal(item.id, '100');
+        assert.equal(options.before, 1);
+        assert.equal(options.after, 1);
+        return { contextBefore: [before], contextAfter: [after] };
+      },
+    },
+    model: {
+      plan: async () => ['หมูกระทะ'],
+      answer: async ({ sources }) => {
+        assert.deepEqual(sources, [{ target, contextBefore: [before], contextAfter: [after] }]);
+        return { answer: 'นัดกัน 18:00 [1]', sourceIds: [1] };
+      },
+    },
+  });
+  try {
+    store.upsert(evidence);
+    await assistant.handle(message);
+    const output = sent.map(item => item.content).join('\n');
+    assert.match(output, /channels\/10\/20\/100/);
+    assert.doesNotMatch(output, /channels\/10\/20\/(?:99|101)/);
+  } finally { store.close(); }
+});
+
+test('a transient context failure falls back to verified target-only evidence', async () => {
+  const warnings = [];
+  const { assistant, store, message, sent } = fixture({
+    source: { refresh: async () => evidence, readContext: async () => { throw new Error('temporary Discord failure'); } },
+    model: {
+      plan: async () => ['หมูกระทะ'],
+      answer: async ({ sources }) => {
+        assert.deepEqual(sources, [{ target: evidence, contextBefore: [], contextAfter: [] }]);
+        return { answer: 'วันศุกร์ [1]', sourceIds: [1] };
+      },
+    },
+    logger: { warn: message => warnings.push(message) },
+  });
+  try {
+    store.upsert(evidence);
+    await assistant.handle(message);
+    assert.match(sent.map(item => item.content).join('\n'), /วันศุกร์/);
+    assert.ok(warnings.some(item => /Context expansion failed/.test(item)));
+  } finally { store.close(); }
+});
+
+test('a context timeout aborts only expansion and still generates from the verified target', async () => {
+  let contextAborted = false;
+  let generated = false;
+  const { assistant, store, message, sent } = fixture({
+    contextTimeoutMs: 10,
+    source: {
+      refresh: async () => evidence,
+      readContext: async (_target, { signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          contextAborted = true;
+          reject(Object.assign(new Error('context timeout'), { name: 'AbortError' }));
+        }, { once: true });
+      }),
+    },
+    model: {
+      plan: async () => ['หมูกระทะ'],
+      answer: async ({ sources }) => {
+        generated = true;
+        assert.deepEqual(sources, [{ target: evidence, contextBefore: [], contextAfter: [] }]);
+        return { answer: 'วันศุกร์ [1]', sourceIds: [1] };
+      },
+    },
+  });
+  try {
+    store.upsert(evidence);
+    const completed = await Promise.race([
+      assistant.handle(message).then(() => true),
+      new Promise(resolve => setTimeout(() => resolve(false), 100)),
+    ]);
+    assert.equal(completed, true);
+    assert.equal(contextAborted, true);
+    assert.equal(generated, true);
+    assert.match(sent.map(item => item.content).join('\n'), /วันศุกร์/);
+  } finally { await assistant.stop(); store.close(); }
+});
+
+test('permission loss during context expansion removes the target before generation', async () => {
+  const { assistant, store, message, sent } = fixture({
+    source: { refresh: async () => evidence, readContext: async () => null },
+    model: { plan: async () => ['หมูกระทะ'], answer: async () => { throw new Error('must not generate'); } },
+  });
+  try {
+    store.upsert(evidence);
+    await assistant.handle(message);
+    assert.match(sent[0].content, /ไม่พบ/);
+    assert.equal(store.stats().messages, 0);
+  } finally { store.close(); }
+});
+
+test('the final target revalidation replaces stale target text before generation and citation', async () => {
+  const finalTarget = { ...evidence, content: 'หมูกระทะเปลี่ยนเป็นวันอาทิตย์' };
+  let receivedTarget;
+  const { assistant, store, message, sent } = fixture({
+    source: {
+      refresh: async () => evidence,
+      readContext: async () => ({ target: finalTarget, contextBefore: [], contextAfter: [] }),
+    },
+    model: {
+      plan: async () => ['หมูกระทะ'],
+      answer: async ({ sources }) => {
+        receivedTarget = sources[0].target;
+        return { answer: 'วันอาทิตย์ [1]', sourceIds: [1] };
+      },
+    },
+  });
+  try {
+    store.upsert(evidence);
+    await assistant.handle(message);
+    assert.equal(receivedTarget.content, finalTarget.content);
+    assert.equal(store.search(['วันอาทิตย์'])[0].content, finalTarget.content);
+    assert.match(sent.map(item => item.content).join('\n'), /channels\/10\/20\/100/);
+  } finally { store.close(); }
+});
+
+test('overlapping windows deduplicate context without merging independent citation targets', async () => {
+  const first = { ...evidence, id: '100', content: 'หมูกระทะวันศุกร์', createdAt: 1700000000000 };
+  const second = { ...evidence, id: '101', content: 'หมูกระทะหกโมง', createdAt: 1700000001000 };
+  const shared = { ...evidence, id: '90', content: 'นัดกินข้าวกัน', createdAt: 1699999999000 };
+  const targets = new Map([[first.id, first], [second.id, second]]);
+  let receivedSources;
+  const { assistant, store, message, sent } = fixture({
+    source: {
+      refresh: async item => targets.get(item.id),
+      readContext: async item => ({
+        contextBefore: [shared, item.id === first.id ? second : first],
+        contextAfter: [],
+      }),
+    },
+    model: {
+      plan: async () => ['หมูกระทะ'],
+      answer: async ({ sources }) => {
+        receivedSources = sources;
+        return { answer: 'วันศุกร์ [1] ตอนหกโมงตามข้อความยืนยัน [2]', sourceIds: [1, 2] };
+      },
+    },
+  });
+  try {
+    store.upsert(first);
+    store.upsert(second);
+    await assistant.handle(message);
+    assert.deepEqual(new Set(receivedSources.map(unit => unit.target.id)), new Set(['100', '101']));
+    const contextIds = receivedSources.flatMap(unit => [...unit.contextBefore, ...unit.contextAfter].map(item => item.id));
+    assert.deepEqual(contextIds, ['90']);
+    const output = sent.map(item => item.content).join('\n');
+    assert.match(output, /channels\/10\/20\/100/);
+    assert.match(output, /channels\/10\/20\/101/);
+    assert.doesNotMatch(output, /channels\/10\/20\/90/);
   } finally { store.close(); }
 });
 

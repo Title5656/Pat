@@ -1,4 +1,5 @@
 const { resolve } = require('node:path');
+const { RESEARCH_LIMITS } = require('./limits');
 
 function loadConfig(env = process.env, directory = resolve(__dirname, '../..')) {
   if (!env.PAT_RESEARCH_CHANNEL_ID?.trim()) return null;
@@ -26,6 +27,8 @@ function loadConfig(env = process.env, directory = resolve(__dirname, '../..')) 
     databasePath: resolve(directory, env.PAT_RESEARCH_DATABASE_PATH || 'data/research.sqlite'),
     syncIntervalMs: integer('PAT_RESEARCH_SYNC_INTERVAL_SECONDS', 60, 10, 86400) * 1000,
     pagesPerChannel: integer('PAT_RESEARCH_PAGES_PER_CHANNEL', 3, 1, 100),
+    contextBefore: integer('PAT_RESEARCH_CONTEXT_BEFORE', RESEARCH_LIMITS.contextBefore, 0, RESEARCH_LIMITS.maxContextMessages),
+    contextAfter: integer('PAT_RESEARCH_CONTEXT_AFTER', RESEARCH_LIMITS.contextAfter, 0, RESEARCH_LIMITS.maxContextMessages),
   };
 }
 

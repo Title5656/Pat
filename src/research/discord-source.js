@@ -24,13 +24,27 @@ function createDiscordSource({ client, qaChannelId, logger = console }) {
     record,
     async listGuilds({ signal } = {}) {
       signal?.throwIfAborted();
-      return [...client.guilds.cache.values()]
+      const guilds = new Map(client.guilds.cache);
+      if (typeof client.guilds.fetch === 'function') {
+        try {
+          const fetched = await client.guilds.fetch();
+          for (const guild of fetched.values()) guilds.set(guild.id, guild);
+        } catch (error) {
+          logger.warn(`Guild catalog refresh failed; code=${error.code ?? error.name ?? 'unknown'}`);
+        }
+        signal?.throwIfAborted();
+      }
+      return [...guilds.values()]
         .map(guild => ({ id: guild.id, name: guild.name }))
         .sort((a, b) => a.name.localeCompare(b.name, 'th'));
     },
     async listChannels(guildId, { signal } = {}) {
       signal?.throwIfAborted();
-      const guild = client.guilds.cache.get(guildId);
+      let guild = client.guilds.cache.get(guildId);
+      if (!guild && typeof client.guilds.fetch === 'function') {
+        try { guild = await client.guilds.fetch(guildId); } catch { return []; }
+        signal?.throwIfAborted();
+      }
       if (!guild) return [];
       const channels = await guild.channels.fetch();
       signal?.throwIfAborted();

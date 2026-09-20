@@ -299,6 +299,8 @@ test('an explicitly named missing server never falls back to the only connected 
     await browsing.deliver('เซิร์ฟเวอร์ Missing มีห้องไหนบ้าง');
     const output = browsing.sent.map(item => item.content).join('\n');
     assert.match(output, /ไม่พบเซิร์ฟเวอร์.*Missing/);
+    assert.match(output, /รายชื่อเซิร์ฟเวอร์ที่ Pat เชื่อมต่ออยู่/);
+    assert.match(output, /1\. Friends/);
     assert.doesNotMatch(output, /#general/);
   } finally { await browsing.assistant.stop(); browsing.store.close(); }
 });

@@ -121,7 +121,7 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
 
   function guildOptions(guilds) {
     if (!guilds.length) return 'ไม่พบเซิร์ฟเวอร์ที่ Pat เชื่อมต่ออยู่ครับ';
-    return `กรุณาระบุชื่อเซิร์ฟเวอร์จากรายการนี้\n${guilds.map((guild, index) => `${index + 1}. ${label(guild.name)}`).join('\n')}`;
+    return `รายชื่อเซิร์ฟเวอร์ที่ Pat เชื่อมต่ออยู่\n${guilds.map((guild, index) => `${index + 1}. ${label(guild.name)}`).join('\n')}`;
   }
 
   async function chooseGuild(command, session, token) {
@@ -134,7 +134,7 @@ function createAssistant({ store, source, model, qaChannelId, status, logger = c
       const matches = exactMatches(guilds, command.serverName);
       if (matches.length === 1) return { guild: matches[0], guilds };
       if (matches.length > 1) return { error: guildOptions(matches), guilds };
-      return { error: `ไม่พบเซิร์ฟเวอร์ ${label(command.serverName)} ในรายการที่ Pat เชื่อมต่ออยู่ครับ`, guilds };
+      return { error: `ไม่พบเซิร์ฟเวอร์ ${label(command.serverName)} ในรายการที่ Pat เชื่อมต่ออยู่ครับ\n${guildOptions(guilds)}`, guilds };
     }
     if (guilds.length === 1) return { guild: guilds[0], guilds };
     return { error: guildOptions(guilds), guilds };

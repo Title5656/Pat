@@ -84,6 +84,36 @@ test('read-only catalog lists readable text channels without exposing the Q&A ro
   assert.equal(source.deleteChannel, undefined);
 });
 
+test('read-only catalog refreshes guilds from Discord when the gateway cache is stale', async () => {
+  const { client, channel, guild } = fixture();
+  client.guilds.cache.clear();
+  const requests = [];
+  client.guilds.fetch = async id => {
+    requests.push(id ?? 'all');
+    return id ? guild : new Map([['10', { id: '10', name: 'Friends' }]]);
+  };
+  guild.channels = { fetch: async () => new Map([['20', channel]]) };
+  const source = createDiscordSource({ client, qaChannelId: '99' });
+
+  assert.deepEqual(await source.listGuilds(), [{ id: '10', name: 'Friends' }]);
+  assert.deepEqual(await source.listChannels('10'), [{
+    id: '20', guildId: '10', guildName: 'Friends', name: 'general', type: ChannelType.GuildText,
+  }]);
+  assert.deepEqual(requests, ['all', '10']);
+});
+
+test('guild refresh preserves reset cancellation instead of falling back to stale cache', async () => {
+  const { client } = fixture();
+  const controller = new AbortController();
+  client.guilds.fetch = async () => {
+    controller.abort();
+    return new Map();
+  };
+  const source = createDiscordSource({ client, qaChannelId: '99', logger: { warn() {} } });
+
+  await assert.rejects(source.listGuilds({ signal: controller.signal }), { name: 'AbortError' });
+});
+
 test('message pages are read live without mutating the source channel', async () => {
   const { client, channel } = fixture();
   const second = { ...(await channel.messages.fetch({ force: true, cache: false })), id: '101', content: 'second', createdTimestamp: 1700000001000 };

@@ -35,6 +35,12 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
+client.rest?.on?.('rateLimited', ({ route, retryAfter, global }) => {
+  console.warn(`Discord REST rate limited; route=${route}; retryAfter=${retryAfter}; global=${global}`);
+});
+client.rest?.on?.('response', (request, response) => {
+  if (request.path === '/gateway/bot') console.log(`Discord gateway REST response; status=${response.status}`);
+});
 
 const memory = createMemory({ maxMessages: 12 });
 const generate = geminiApiKey

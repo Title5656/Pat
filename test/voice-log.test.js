@@ -122,7 +122,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     get loginCount() { return loginCount; },
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
-    triggerLoginTimeout: () => loginTimeout(),
+    triggerLoginTimeout: () => loginTimeout?.(),
     emitReady: () => {
       ready = true;
       return listeners.get('ready')({
@@ -327,18 +327,22 @@ test('research attaches to the same Pat connection only after Discord is ready',
   assert.deepEqual(Array.from(app.clientOptions.partials), ['partial-message', 'partial-channel']);
 });
 
-test('restarts when Discord login hangs', async () => {
+test('keeps login alive while Discord waits out a rate limit longer than fifteen minutes', async () => {
+  let finishLogin;
   let destroyed = false;
   const app = setup({
-    loginImpl: () => new Promise(() => {}),
+    loginImpl: () => new Promise(resolve => { finishLogin = resolve; }),
     destroyImpl: () => { destroyed = true; },
   });
 
   app.triggerLoginTimeout();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(destroyed, true);
-  assert.equal(app.shutdownState.exitCode, 1);
-  assert.match(app.errors.join('\n'), /timed out after 15 minutes/);
+  assert.equal(destroyed, false);
+  assert.equal(app.shutdownState.exitCode, null);
+  finishLogin();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.loginCount, 1);
+  assert.equal(app.shutdownState.exitCode, null);
 });
 
 test('failed research initialization leaves original voice and chat listeners working', async () => {

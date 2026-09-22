@@ -304,9 +304,9 @@ test('reports Discord readiness to Render health checks', async () => {
   assert.equal(ready.body, 'ok');
   assert.deepEqual(app.logs, [
     'HTTP REQ GET /health', 'HTTP RES GET /health 200',
-    'HTTP REQ GET /ready', 'HTTP RES GET /ready 503',
+    'HTTP REQ GET /ready', 'Discord gateway status=unknown', 'HTTP RES GET /ready 503',
     'Ready! Logged in as Pat#0001',
-    'HTTP REQ GET /ready', 'HTTP RES GET /ready 200',
+    'HTTP REQ GET /ready', 'Discord gateway status=unknown', 'HTTP RES GET /ready 200',
   ]);
 });
 

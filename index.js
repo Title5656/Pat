@@ -47,6 +47,7 @@ let healthServer;
 if (process.env.PORT) {
   healthServer = require('node:http').createServer((req, res) => {
     console.log(`HTTP REQ ${req.method} ${req.url}`);
+    if (req.url === '/ready') console.log(`Discord gateway status=${client.ws?.status ?? 'unknown'}`);
     res.once('finish', () => console.log(`HTTP RES ${req.method} ${req.url} ${res.statusCode}`));
     const healthy = req.url === '/health' || client.isReady();
     res.writeHead(healthy ? 200 : 503, { 'content-type': 'text/plain' });
@@ -83,6 +84,14 @@ client.once(Events.ClientReady, async (readyClient) => {
       ? error.message : (error.code ?? error.name ?? 'unknown');
     console.error(`Pat research could not start: ${reason}. Existing chat and voice logging remain active.`);
   }
+});
+
+client.on(Events.ShardDisconnect, (event, id) => {
+  console.warn(`Discord shard disconnected; id=${id}; code=${event.code}`);
+});
+client.on(Events.ShardReconnecting, id => console.warn(`Discord shard reconnecting; id=${id}`));
+client.on(Events.ShardError, (error, id) => {
+  console.error(`Discord shard error; id=${id}; code=${error.code ?? error.name ?? 'unknown'}`);
 });
 
 client.on(Events.MessageCreate, message => {

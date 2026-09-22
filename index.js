@@ -39,7 +39,9 @@ client.rest?.on?.('rateLimited', ({ route, retryAfter, global }) => {
   console.warn(`Discord REST rate limited; route=${route}; retryAfter=${retryAfter}; global=${global}`);
 });
 client.rest?.on?.('response', (request, response) => {
-  if (request.path === '/gateway/bot') console.log(`Discord gateway REST response; status=${response.status}`);
+  if (request.path === '/gateway/bot') {
+    console.log(`Discord gateway REST response; status=${response.status}; retryAfter=${response.headers.get('Retry-After') ?? 'none'}; scope=${response.headers.get('X-RateLimit-Scope') ?? 'none'}; global=${response.headers.has('X-RateLimit-Global')}`);
+  }
 });
 
 const memory = createMemory({ maxMessages: 12 });

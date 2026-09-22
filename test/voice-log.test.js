@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl } = {}) {
   const messages = [];
   const errors = [];
   const logs = [];
@@ -19,6 +19,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   let httpHandler;
   let fetchCount = 0;
   const fetchedChannelIds = [];
+  let loginTimeout;
   let ready = false;
   class Client {
     constructor(options) { clientOptions = options; createdClient = this; }
@@ -42,7 +43,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
     isReady() { return ready; }
-    login() { loginCount++; return Promise.resolve(); }
+    login() { loginCount++; return loginImpl?.() ?? Promise.resolve(); }
     async destroy() { await destroyImpl?.(); }
   }
   vm.runInNewContext(source, {
@@ -103,8 +104,13 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
       },
     },
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
-    setTimeout: () => ({ unref() {} }),
-    clearTimeout: () => { shutdownState.deadlineCleared = true; },
+    setTimeout: (callback, delay) => {
+      if (delay === 60_000) loginTimeout = callback;
+      return { delay, unref() {} };
+    },
+    clearTimeout: timer => {
+      if (timer?.delay === 20_000) shutdownState.deadlineCleared = true;
+    },
     console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => errors.push(args.join(' ')) },
   });
   return {
@@ -116,6 +122,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     get loginCount() { return loginCount; },
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
+    triggerLoginTimeout: () => loginTimeout(),
     emitReady: () => {
       ready = true;
       return listeners.get('ready')({
@@ -314,6 +321,20 @@ test('research attaches to the same Pat connection only after Discord is ready',
   assert.deepEqual(app.researchClients, [app.createdClient]);
   assert.equal(app.loginCount, 1);
   assert.deepEqual(Array.from(app.clientOptions.partials), ['partial-message', 'partial-channel']);
+});
+
+test('restarts when Discord login hangs', async () => {
+  let destroyed = false;
+  const app = setup({
+    loginImpl: () => new Promise(() => {}),
+    destroyImpl: () => { destroyed = true; },
+  });
+
+  app.triggerLoginTimeout();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(destroyed, true);
+  assert.equal(app.shutdownState.exitCode, 1);
+  assert.match(app.errors.join('\n'), /timed out after 60 seconds/);
 });
 
 test('failed research initialization leaves original voice and chat listeners working', async () => {

@@ -164,7 +164,21 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 });
 
 if (token && logChannelId && chatChannelId && geminiApiKey) {
-  client.login(token).catch((err) => {
-    console.error('Failed to log in to Discord:', err.message);
-  });
+  void (async () => {
+    let deadline;
+    try {
+      await Promise.race([
+        client.login(token),
+        new Promise((_, reject) => {
+          deadline = setTimeout(() => reject(new Error('timed out after 60 seconds')), 60_000);
+          deadline.unref?.();
+        }),
+      ]);
+    } catch (err) {
+      console.error('Failed to log in to Discord:', err.message);
+      try { await client.destroy(); } finally { process.exit(1); }
+    } finally {
+      clearTimeout(deadline);
+    }
+  })();
 }

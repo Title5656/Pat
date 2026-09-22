@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl } = {}) {
   const messages = [];
   const errors = [];
   const logs = [];
@@ -73,7 +73,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         return { createGeminiGenerator: () => async () => 'answer' };
       }
       if (id === './src/chat/handle-message') {
-        return { createMessageHandler: () => async () => {} };
+        return { createMessageHandler: () => messageHandlerImpl ?? (async () => {}) };
       }
       if (id === './src/research/feature') {
         return { startResearch: async ({ client }) => {
@@ -123,6 +123,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
     triggerLoginTimeout: () => loginTimeout?.(),
+    emitMessage: message => listeners.get('message')(message),
     emitReady: () => {
       ready = true;
       return listeners.get('ready')({
@@ -327,7 +328,7 @@ test('research attaches to the same Pat connection only after Discord is ready',
   assert.deepEqual(Array.from(app.clientOptions.partials), ['partial-message', 'partial-channel']);
 });
 
-test('keeps login alive while Discord waits out a rate limit longer than fifteen minutes', async () => {
+test('keeps login alive beyond the old fifteen-minute deadline', async () => {
   let finishLogin;
   let destroyed = false;
   const app = setup({
@@ -343,6 +344,17 @@ test('keeps login alive while Discord waits out a rate limit longer than fifteen
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(app.loginCount, 1);
   assert.equal(app.shutdownState.exitCode, null);
+});
+
+test('unexpected chat failures log only an error code', async () => {
+  const app = setup({ messageHandlerImpl: async () => {
+    throw Object.assign(new Error('token=private-value'), { code: 'EFAIL' });
+  } });
+
+  app.emitMessage({ id: 'message-1', channelId: 'chat-room' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(app.errors.join('\n'), /code=EFAIL/);
+  assert.doesNotMatch(app.errors.join('\n'), /private-value/);
 });
 
 test('failed research initialization leaves original voice and chat listeners working', async () => {

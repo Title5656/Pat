@@ -106,7 +106,7 @@ client.on(Events.MessageCreate, message => {
   if (message.channelId === chatChannelId || message.channelId === process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
     console.log(`Discord message received; id=${message.id}; channel=${message.channelId}`);
   }
-  void messageHandler(message).catch(error => console.error('Chat message handler failed:', error));
+  void messageHandler(message).catch(error => console.error(`Chat message handler failed; code=${error?.code ?? error?.name ?? 'unknown'}`));
 });
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {

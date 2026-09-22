@@ -105,7 +105,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     },
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
     setTimeout: (callback, delay) => {
-      if (delay === 60_000) loginTimeout = callback;
+      if (delay === 15 * 60_000) loginTimeout = callback;
       return { delay, unref() {} };
     },
     clearTimeout: timer => {
@@ -334,7 +334,7 @@ test('restarts when Discord login hangs', async () => {
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(destroyed, true);
   assert.equal(app.shutdownState.exitCode, 1);
-  assert.match(app.errors.join('\n'), /timed out after 60 seconds/);
+  assert.match(app.errors.join('\n'), /timed out after 15 minutes/);
 });
 
 test('failed research initialization leaves original voice and chat listeners working', async () => {

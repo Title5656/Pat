@@ -170,7 +170,7 @@ if (token && logChannelId && chatChannelId && geminiApiKey) {
       await Promise.race([
         client.login(token),
         new Promise((_, reject) => {
-          deadline = setTimeout(() => reject(new Error('timed out after 60 seconds')), 60_000);
+          deadline = setTimeout(() => reject(new Error('timed out after 15 minutes')), 15 * 60_000);
           deadline.unref?.();
         }),
       ]);

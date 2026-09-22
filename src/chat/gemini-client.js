@@ -1,6 +1,6 @@
 const { GoogleGenAI } = require('@google/genai');
 
-function createGeminiGenerator({ apiKey, model, GoogleGenAIClass = GoogleGenAI }) {
+function createGeminiGenerator({ apiKey, model, GoogleGenAIClass = GoogleGenAI, timeoutMs = 60_000 }) {
   const client = new GoogleGenAIClass({ apiKey });
 
   return async ({ instructions, input }) => {
@@ -10,7 +10,10 @@ function createGeminiGenerator({ apiKey, model, GoogleGenAIClass = GoogleGenAI }
         role,
         parts: [{ text: content }, ...images.map((image) => ({ inlineData: image }))],
       })),
-      config: { systemInstruction: instructions },
+      config: {
+        systemInstruction: instructions,
+        abortSignal: AbortSignal.timeout(timeoutMs),
+      },
     });
 
     const blockReason = response.promptFeedback?.blockReason;

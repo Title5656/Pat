@@ -8,6 +8,7 @@ const source = readFileSync(require.resolve('../index.js'), 'utf8');
 function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl } = {}) {
   const messages = [];
   const errors = [];
+  const logs = [];
   const listeners = new Map();
   let clientOptions;
   let createdClient;
@@ -18,6 +19,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   let httpHandler;
   let fetchCount = 0;
   const fetchedChannelIds = [];
+  let ready = false;
   class Client {
     constructor(options) { clientOptions = options; createdClient = this; }
     application = { commands: {} };
@@ -39,7 +41,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     };
     once(event, listener) { listeners.set(event, listener); }
     on(event, listener) { listeners.set(event, listener); }
-    isReady() { return false; }
+    isReady() { return ready; }
     login() { loginCount++; return Promise.resolve(); }
     async destroy() { await destroyImpl?.(); }
   }
@@ -103,10 +105,10 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
     setTimeout: () => ({ unref() {} }),
     clearTimeout: () => { shutdownState.deadlineCleared = true; },
-    console: { log() {}, error: (...args) => errors.push(args.join(' ')) },
+    console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => errors.push(args.join(' ')) },
   });
   return {
-    messages, errors, fetchedChannelIds,
+    messages, errors, logs, fetchedChannelIds,
     researchClients,
     shutdownState,
     emitSignal: signal => signals.get(signal)(),
@@ -114,14 +116,23 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     get loginCount() { return loginCount; },
     get clientOptions() { return clientOptions; },
     get fetchCount() { return fetchCount; },
-    emitReady: () => listeners.get('ready')({
-      application: { commands: {} },
-      user: { tag: 'Pat#0001' },
-    }),
+    emitReady: () => {
+      ready = true;
+      return listeners.get('ready')({
+        application: { commands: {} },
+        user: { tag: 'Pat#0001' },
+      });
+    },
     hasListener: (event) => listeners.has(event),
     emit: (oldState, newState) => listeners.get('voice')(oldState, newState),
     request: (url) => {
-      const response = { body: '', writeHead(status, headers) { this.status = status; this.headers = headers; }, end(body) { this.body = body; } };
+      let finish;
+      const response = {
+        body: '',
+        once(event, listener) { if (event === 'finish') finish = listener; },
+        writeHead(status, headers) { this.status = this.statusCode = status; this.headers = headers; },
+        end(body) { this.body = body; finish?.(); },
+      };
       httpHandler({ method: 'GET', url }, response);
       return response;
     },
@@ -176,7 +187,7 @@ test('routes external guild events to the primary log channel and labels every r
   await app.emit(state('voice', external), state('gaming', { ...external, selfMute: true, selfDeaf: true, streaming: true }));
   await app.emit(state('voice', { ...external, streaming: true }), state('voice', external));
   await app.emit(state('voice', external), { channelId: null, member: null });
-  assert.equal(app.messages.length, 7);
+  assert.equal(app.messages.length, 6);
   assert.deepEqual(app.fetchedChannelIds, ['log', 'log', 'log', 'log']);
   for (const message of app.messages) {
     const roomLines = message.embeds[0].description.split('\n').filter(line => /\*\*(Channel|From|To):\*\*/.test(line));
@@ -195,13 +206,10 @@ test('keeps external guild names on one line without active markdown', async () 
 for (const [name, before, after, title, status] of [
   ['mute', false, true, '🎙️ Microphone Changed', 'Muted 🔇'],
   ['unmute', true, false, '🎙️ Microphone Changed', 'Unmuted 🎤'],
-  ['deafen', false, true, '🎧 Deafen Changed', 'Deafened 🔇'],
-  ['undeafen', true, false, '🎧 Deafen Changed', 'Undeafened 🎧'],
 ]) {
   test(`logs ${name} with the new status`, async () => {
     const app = setup();
-    const key = name.includes('deafen') ? 'selfDeaf' : 'selfMute';
-    await app.emit(state('voice', { [key]: before }), state('voice', { [key]: after }));
+    await app.emit(state('voice', { selfMute: before }), state('voice', { selfMute: after }));
     assert.equal(log(app).title, title);
     assert.match(log(app).description, new RegExp(`\\*\\*Status:\\*\\* ${status}`));
     assert.match(log(app).description, /\*\*Channel:\*\* `General`/);
@@ -219,16 +227,17 @@ test('logs stream start and stop, with placeholder stop duration', async () => {
   assert.equal(log(app, 1).description, '> 👤 **User:** Pat\n> 🔊 **Channel:** `General`\n> ⏱️ **Stream Duration:** Coming soon\n> 🕒 **Time:** 19:35:24');
 });
 
-test('logs every changed voice property in one update', async () => {
+test('logs supported voice changes while ignoring deafen', async () => {
   const app = setup();
   await app.emit(state('voice'), state('gaming', { selfMute: true, selfDeaf: true, streaming: true }));
   assert.deepEqual(app.messages.map((_, index) => log(app, index).title), [
-    '🔄 Voice Moved', '🎙️ Microphone Changed', '🎧 Deafen Changed', '📺 Stream Started',
+    '🔄 Voice Moved', '🎙️ Microphone Changed', '📺 Stream Started',
   ]);
 });
 
 for (const [name, oldState, newState] of [
   ['camera changes', state('voice'), { ...state('voice'), selfVideo: true }],
+  ['deafen changes', state('voice'), state('voice', { selfDeaf: true })],
   ['unchanged voice state', state('voice'), state('voice')],
   ['bot accounts', state(null, { bot: true }), state('voice', { bot: true })],
   ['missing members', { channelId: null }, { channelId: 'a' }],
@@ -271,12 +280,31 @@ test('binds normal messages with the message-content intents', async () => {
 
 });
 
-test('serves Render health checks at /health', () => {
-  const response = setup({ port: '3000' }).request('/health');
+test('reports Discord readiness to Render health checks', async () => {
+  const app = setup({ port: '3000' });
+  const disconnected = app.request('/health');
 
-  assert.equal(response.status, 200);
-  assert.equal(response.headers['content-type'], 'text/plain');
-  assert.equal(response.body, 'ok');
+  assert.equal(disconnected.status, 503);
+  assert.equal(disconnected.headers['content-type'], 'text/plain');
+  assert.equal(disconnected.body, 'discord disconnected');
+
+  await app.emitReady();
+  const ready = app.request('/health');
+  assert.equal(ready.status, 200);
+  assert.equal(ready.body, 'ok');
+  assert.deepEqual(app.logs, [
+    'HTTP REQ GET /health', 'HTTP RES GET /health 503',
+    'Ready! Logged in as Pat#0001',
+    'HTTP REQ GET /health', 'HTTP RES GET /health 200',
+  ]);
+});
+
+test('logs fallback requests and responses', () => {
+  const app = setup({ port: '3000' });
+  const response = app.request('/');
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(app.logs, ['HTTP REQ GET /', 'HTTP RES GET / 503']);
 });
 
 test('research attaches to the same Pat connection only after Discord is ready', async () => {

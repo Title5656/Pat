@@ -30,6 +30,8 @@ test('maps conversation history to Gemini and returns response text', async () =
     ],
   });
 
+  assert.ok(request.config.abortSignal instanceof AbortSignal);
+  delete request.config.abortSignal;
   assert.deepEqual(request, {
     model: 'configured-model',
     contents: [
@@ -39,6 +41,26 @@ test('maps conversation history to Gemini and returns response text', async () =
     config: { systemInstruction: 'persona' },
   });
   assert.equal(result, 'คำตอบ');
+});
+
+test('aborts a Gemini request that exceeds its timeout', async () => {
+  class FakeGoogleGenAI {
+    models = {
+      generateContent: ({ config }) => new Promise((resolve, reject) => {
+        config.abortSignal.addEventListener('abort', () => reject(config.abortSignal.reason));
+      }),
+    };
+  }
+  const generate = createGeminiGenerator({
+    apiKey: 'key',
+    model: 'configured-model',
+    GoogleGenAIClass: FakeGoogleGenAI,
+    timeoutMs: 1,
+  });
+
+  await assert.rejects(() => generate({ instructions: 'persona', input: [] }), {
+    name: 'TimeoutError',
+  });
 });
 
 test('maps attached images to Gemini inline data parts', async () => {

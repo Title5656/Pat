@@ -46,11 +46,8 @@ const messageHandler = createMessageHandler({ chatChannelId, conversation });
 let healthServer;
 if (process.env.PORT) {
   healthServer = require('node:http').createServer((req, res) => {
-    if (req.method === 'GET' && req.url === '/health') {
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      res.end('ok');
-      return;
-    }
+    console.log(`HTTP REQ ${req.method} ${req.url}`);
+    res.once('finish', () => console.log(`HTTP RES ${req.method} ${req.url} ${res.statusCode}`));
     res.writeHead(client.isReady() ? 200 : 503, { 'content-type': 'text/plain' });
     res.end(client.isReady() ? 'ok' : 'discord disconnected');
   }).listen(process.env.PORT, '0.0.0.0');
@@ -102,12 +99,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   const hasChannel = oldState.channelId !== null || newState.channelId !== null;
   const muteChanged = hasChannel && typeof oldState.selfMute === 'boolean'
     && typeof newState.selfMute === 'boolean' && oldState.selfMute !== newState.selfMute;
-  const deafChanged = hasChannel && typeof oldState.selfDeaf === 'boolean'
-    && typeof newState.selfDeaf === 'boolean' && oldState.selfDeaf !== newState.selfDeaf;
   const streamChanged = hasChannel && typeof oldState.streaming === 'boolean'
     && typeof newState.streaming === 'boolean' && oldState.streaming !== newState.streaming;
 
-  if (!isJoin && !isLeave && !isMove && !muteChanged && !deafChanged && !streamChanged) {
+  if (!isJoin && !isLeave && !isMove && !muteChanged && !streamChanged) {
     return;
   }
 
@@ -147,7 +142,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🔊 **Channel:** \`${oldChannel}\`${serverSuffix}`, '> ⏱️ **Duration:** Coming soon', timestamp]]);
     if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 📤 **From:** \`${oldChannel}\`${serverSuffix}`, `> 📥 **To:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
     if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
-    if (deafChanged) logs.push(['🎧 Deafen Changed', 0x9B59B6, [user, `> 🎧 **Status:** ${newState.selfDeaf ? 'Deafened 🔇' : 'Undeafened 🎧'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
     if (streamChanged) {
       const started = newState.streaming;
       logs.push([started ? '📺 Stream Started' : '📺 Stream Stopped', started ? 0x1ABC9C : 0x95A5A6,

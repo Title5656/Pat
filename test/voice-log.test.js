@@ -289,20 +289,24 @@ test('binds normal messages with the message-content intents', async () => {
 
 test('reports Discord readiness to Render health checks', async () => {
   const app = setup({ port: '3000' });
-  const disconnected = app.request('/health');
+  const health = app.request('/health');
+  const disconnected = app.request('/ready');
 
+  assert.equal(health.status, 200);
+  assert.equal(health.body, 'ok');
   assert.equal(disconnected.status, 503);
   assert.equal(disconnected.headers['content-type'], 'text/plain');
   assert.equal(disconnected.body, 'discord disconnected');
 
   await app.emitReady();
-  const ready = app.request('/health');
+  const ready = app.request('/ready');
   assert.equal(ready.status, 200);
   assert.equal(ready.body, 'ok');
   assert.deepEqual(app.logs, [
-    'HTTP REQ GET /health', 'HTTP RES GET /health 503',
-    'Ready! Logged in as Pat#0001',
     'HTTP REQ GET /health', 'HTTP RES GET /health 200',
+    'HTTP REQ GET /ready', 'HTTP RES GET /ready 503',
+    'Ready! Logged in as Pat#0001',
+    'HTTP REQ GET /ready', 'HTTP RES GET /ready 200',
   ]);
 });
 

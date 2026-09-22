@@ -48,8 +48,9 @@ if (process.env.PORT) {
   healthServer = require('node:http').createServer((req, res) => {
     console.log(`HTTP REQ ${req.method} ${req.url}`);
     res.once('finish', () => console.log(`HTTP RES ${req.method} ${req.url} ${res.statusCode}`));
-    res.writeHead(client.isReady() ? 200 : 503, { 'content-type': 'text/plain' });
-    res.end(client.isReady() ? 'ok' : 'discord disconnected');
+    const healthy = req.url === '/health' || client.isReady();
+    res.writeHead(healthy ? 200 : 503, { 'content-type': 'text/plain' });
+    res.end(healthy ? 'ok' : 'discord disconnected');
   }).listen(process.env.PORT, '0.0.0.0');
 }
 

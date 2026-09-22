@@ -85,7 +85,12 @@ client.once(Events.ClientReady, async (readyClient) => {
   }
 });
 
-client.on(Events.MessageCreate, messageHandler);
+client.on(Events.MessageCreate, message => {
+  if (message.channelId === chatChannelId || message.channelId === process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
+    console.log(`Discord message received; id=${message.id}; channel=${message.channelId}`);
+  }
+  void messageHandler(message).catch(error => console.error('Chat message handler failed:', error));
+});
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   const member = newState.member ?? oldState.member;

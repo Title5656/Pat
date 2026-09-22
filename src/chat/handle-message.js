@@ -36,6 +36,7 @@ function createMessageHandler({ chatChannelId, conversation, fetchFn = fetch, lo
     }
 
     await message.channel.sendTyping().catch(() => {});
+    logger.log?.(`Chat typing completed; id=${message.id}`);
 
     let answer;
     try {
@@ -54,6 +55,7 @@ function createMessageHandler({ chatChannelId, conversation, fetchFn = fetch, lo
         text: message.content.trim() || DEFAULT_IMAGE_PROMPT,
         ...(images.length ? { images } : {}),
       });
+      logger.log?.(`Chat answer generated; id=${message.id}`);
     } catch (error) {
       logger.error('Failed to answer chat message:', error);
       try {

@@ -46,6 +46,7 @@ function createRuntime({ client, store, model, config, logger = console,
     if (message.channelId === config.qaChannelId) {
       if (message.author?.bot || !message.content?.trim()) return;
       await checkOutput();
+      logger.log(`Forger output checked; id=${message.id}`);
       await assistant.handle(message);
       return;
     }

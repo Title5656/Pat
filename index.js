@@ -35,6 +35,25 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
   ],
 });
+// Separate slow Discord HTTP from time spent queued by the REST client.
+const makeDiscordRequest = client.rest?.options?.makeRequest;
+if (makeDiscordRequest) {
+  client.rest.options.makeRequest = async (url, options) => {
+    const started = Date.now();
+    const path = new URL(url).pathname.replace(/\d{17,20}/g, ':id');
+    try {
+      const response = await makeDiscordRequest(url, options);
+      const elapsedMs = Date.now() - started;
+      if (elapsedMs >= 2000 || response.status >= 400) {
+        console.warn(`Discord REST HTTP; method=${options.method ?? 'GET'}; path=${path}; status=${response.status}; elapsedMs=${elapsedMs}`);
+      }
+      return response;
+    } catch (error) {
+      console.warn(`Discord REST HTTP failed; method=${options.method ?? 'GET'}; path=${path}; code=${error.code ?? error.name ?? 'unknown'}; elapsedMs=${Date.now() - started}`);
+      throw error;
+    }
+  };
+}
 client.rest?.on?.('rateLimited', ({ route, retryAfter, global }) => {
   console.warn(`Discord REST rate limited; route=${route}; retryAfter=${retryAfter}; global=${global}`);
 });

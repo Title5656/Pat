@@ -5,10 +5,12 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl, timePoints } = {}) {
   const messages = [];
   const errors = [];
   const logs = [];
+  const warnings = [];
+  let clockRead = 0;
   const listeners = new Map();
   let clientOptions;
   let createdClient;
@@ -23,6 +25,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   let ready = false;
   class Client {
     constructor(options) { clientOptions = options; createdClient = this; }
+    rest = { options: { makeRequest: async () => ({ status: 200 }) }, on() {} };
     application = { commands: {} };
     channels = {
       fetch: async (id) => {
@@ -103,7 +106,11 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         PAT_RESEARCH_CHANNEL_ID: researchChannelId,
       },
     },
-    Date: class extends Date { constructor() { super('2026-09-18T12:35:24Z'); } },
+    Date: class extends Date {
+      constructor() { super('2026-09-18T12:35:24Z'); }
+      static now() { return timePoints?.[Math.min(clockRead++, timePoints.length - 1)] ?? Date.now(); }
+    },
+    URL,
     setTimeout: (callback, delay) => {
       if (delay === 15 * 60_000) loginTimeout = callback;
       return { delay, unref() {} };
@@ -111,10 +118,10 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     clearTimeout: timer => {
       if (timer?.delay === 20_000) shutdownState.deadlineCleared = true;
     },
-    console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => errors.push(args.join(' ')) },
+    console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => errors.push(args.join(' ')), warn: (...args) => warnings.push(args.join(' ')) },
   });
   return {
-    messages, errors, logs, fetchedChannelIds,
+    messages, errors, logs, warnings, fetchedChannelIds,
     researchClients,
     shutdownState,
     emitSignal: signal => signals.get(signal)(),
@@ -317,6 +324,19 @@ test('logs fallback requests and responses', () => {
 
   assert.equal(response.status, 503);
   assert.deepEqual(app.logs, ['HTTP REQ GET /', 'HTTP RES GET / 503']);
+});
+
+test('reports slow Discord HTTP separately without leaking channel IDs or query strings', async () => {
+  const app = setup({ timePoints: [1000, 3500] });
+  const response = await app.createdClient.rest.options.makeRequest(
+    'https://discord.com/api/v10/channels/1550774757803171870/messages?token=private',
+    { method: 'GET' },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(app.warnings, [
+    'Discord REST HTTP; method=GET; path=/api/v10/channels/:id/messages; status=200; elapsedMs=2500',
+  ]);
 });
 
 test('research attaches to the same Pat connection only after Discord is ready', async () => {

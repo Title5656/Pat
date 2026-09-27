@@ -122,7 +122,7 @@ test('uses a friendly fallback when Gemini fails', async () => {
   await handler(message);
 
   assert.deepEqual(message.calls.at(-1), ['send', {
-    content: 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠\nGemini error: offline',
+    content: 'พิมคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠\nGemini error: offline',
     allowedMentions: { parse: [] },
   }]);
   assert.equal(errors.length, 1);

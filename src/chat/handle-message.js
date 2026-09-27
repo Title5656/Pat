@@ -1,4 +1,4 @@
-const FAILURE_REPLY = 'แพทคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠';
+const FAILURE_REPLY = 'พิมคิดไม่ออกอะ ลองถามใหม่อีกทีได้มั้ย 🫠';
 const MAX_PUBLIC_ERROR_LENGTH = 500;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_IMAGE_PROMPT = 'ช่วยดูรูปนี้หน่อย';

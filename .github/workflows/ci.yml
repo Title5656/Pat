@@ -3,7 +3,7 @@ name: Bot CI
 on:
   push:
   pull_request:
-    branches: [main, pat]
+    branches: [pat]
   workflow_dispatch:
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
 
   deploy:
     needs: check
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/pat')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/pat'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

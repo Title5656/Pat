@@ -78,6 +78,9 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
       if (id === './src/chat/handle-message') {
         return { createMessageHandler: () => messageHandlerImpl ?? (async () => {}) };
       }
+      if (id === './src/chat/stopwatch') {
+        return { createStopwatch: () => ({ tryHandle: () => null }) };
+      }
       if (id === './src/research/feature') {
         return { startResearch: async ({ client }) => {
           researchClients.push(client);

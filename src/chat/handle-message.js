@@ -22,14 +22,36 @@ function replyOptions(content) {
   };
 }
 
-function createMessageHandler({ chatChannelId, conversation, fetchFn = fetch, logger = console }) {
+function createMessageHandler({
+  chatChannelId,
+  stopwatchChannelId,
+  stopwatch,
+  conversation,
+  fetchFn = fetch,
+  logger = console,
+}) {
   return async (message) => {
+    if (message.author.bot) {
+      return;
+    }
+
+    if (stopwatchChannelId && stopwatch && message.channelId === stopwatchChannelId) {
+      const reply = stopwatch.tryHandle(message);
+      if (reply) {
+        try {
+          await message.channel.send(replyOptions(reply));
+        } catch (error) {
+          logger.error('Failed to send stopwatch reply:', error);
+        }
+      }
+      return;
+    }
+
     const imageAttachments = [...(message.attachments?.values() ?? [])]
       .filter(({ contentType, size }) => contentType?.startsWith('image/')
         && size <= MAX_IMAGE_BYTES);
     if (
       message.channelId !== chatChannelId
-      || message.author.bot
       || (!message.content.trim() && imageAttachments.length === 0)
     ) {
       return;

@@ -3,10 +3,12 @@ const { createMemory } = require('./src/chat/memory');
 const { createConversation } = require('./src/chat/conversation');
 const { createGeminiGenerator } = require('./src/chat/gemini-client');
 const { createMessageHandler } = require('./src/chat/handle-message');
+const { createStopwatch } = require('./src/chat/stopwatch');
 
 const token = process.env.DISCORD_TOKEN;
 const logChannelId = process.env.VOICE_LOG_CHANNEL_ID;
 const chatChannelId = process.env.PAT_CHAT_CHANNEL_ID;
+const stopwatchChannelId = process.env.PAT_STOPWATCH_CHANNEL_ID;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 
@@ -68,7 +70,8 @@ const generate = geminiApiKey
   ? createGeminiGenerator({ apiKey: geminiApiKey, model: geminiModel })
   : async () => { throw new Error('GEMINI_API_KEY is not configured.'); };
 const conversation = createConversation({ generate, memory });
-const messageHandler = createMessageHandler({ chatChannelId, conversation });
+const stopwatch = createStopwatch();
+const messageHandler = createMessageHandler({ chatChannelId, stopwatchChannelId, stopwatch, conversation });
 
 let healthServer;
 if (process.env.PORT) {
@@ -122,7 +125,9 @@ client.on(Events.ShardError, (error, id) => {
 });
 
 client.on(Events.MessageCreate, message => {
-  if (message.channelId === chatChannelId || message.channelId === process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
+  if (message.channelId === chatChannelId
+    || message.channelId === stopwatchChannelId
+    || message.channelId === process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
     console.log(`Discord message received; id=${message.id}; channel=${message.channelId}`);
   }
   void messageHandler(message).catch(error => console.error(`Chat message handler failed; code=${error?.code ?? error?.name ?? 'unknown'}`));

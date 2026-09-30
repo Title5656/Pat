@@ -155,3 +155,44 @@ test('matches commands with extra spaces, different case, and no space after the
   const listed = stopwatch.tryHandle(stopwatchMessage('พิม จับเวลา'));
   assert.match(listed, /ทำการบ้าน/);
 });
+
+test('understands Thai commands with missing tone marks or vowels', () => {
+  const stopwatch = createStopwatch({ now: () => 0 });
+  assert.match(stopwatch.tryHandle(stopwatchMessage('เริมจับเวลา อ่านหนังสือ')), /อ่านหนังสือ/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('เรมจบเวลา')), /run 1/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('พิม ดูจบเวลา', 'คนอื่น')), /run 1/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('หยุด จบเวลา run 1')), /run 1/);
+});
+
+test('understands English commands', () => {
+  const stopwatch = createStopwatch({ now: () => 0 });
+  assert.match(stopwatch.tryHandle(stopwatchMessage('start timer raid', 'แฟนหมา')), /raid/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('start stopwatch homework')), /homework/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('timers', 'คนอื่น')), /raid/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('pim list timers')), /homework/);
+  const stopped = stopwatch.tryHandle(stopwatchMessage('stop timer raid', 'คนอื่น'));
+  assert.match(stopped, /raid/);
+  assert.match(stopped, /แฟนหมา/);
+});
+
+test('understands English commands with one-letter typos including swaps', () => {
+  const stopwatch = createStopwatch({ now: () => 0 });
+  assert.match(stopwatch.tryHandle(stopwatchMessage('START TMER raid')), /raid/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('satrt stopwatch homework')), /homework/);
+  const listed = stopwatch.tryHandle(stopwatchMessage('list tmers'));
+  assert.match(listed, /raid/);
+  assert.match(listed, /homework/);
+  assert.match(stopwatch.tryHandle(stopwatchMessage('stpo timer raid')), /raid/);
+});
+
+test('stays silent on chatter that is not close to any command', () => {
+  const stopwatch = createStopwatch({ now: () => 0 });
+  for (const content of [
+    'star wars tonight',
+    'what time is it',
+    'จับเวลาได้ยัง',
+    'อยากให้พิมช่วยจับเวลาเวลานอนให้หน่อย',
+  ]) {
+    assert.equal(stopwatch.tryHandle(stopwatchMessage(content)), null);
+  }
+});

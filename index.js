@@ -1,9 +1,10 @@
-const { Client, GatewayIntentBits, Events, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, Events, Partials, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
 const { createMemory } = require('./src/chat/memory');
 const { createConversation } = require('./src/chat/conversation');
 const { createGeminiGenerator } = require('./src/chat/gemini-client');
 const { createMessageHandler } = require('./src/chat/handle-message');
 const { createStopwatch } = require('./src/chat/stopwatch');
+const { createVoiceActorResolver } = require('./src/voice/actor');
 
 const token = process.env.DISCORD_TOKEN;
 const logChannelId = process.env.VOICE_LOG_CHANNEL_ID;
@@ -72,6 +73,11 @@ const generate = geminiApiKey
 const conversation = createConversation({ generate, memory });
 const stopwatch = createStopwatch();
 const messageHandler = createMessageHandler({ chatChannelId, stopwatchChannelId, stopwatch, conversation });
+const resolveVoiceActor = createVoiceActorResolver({
+  auditLogEvents: AuditLogEvent,
+  viewAuditLogPermission: PermissionFlagsBits.ViewAuditLog,
+  wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
+});
 
 let healthServer;
 if (process.env.PORT) {
@@ -148,10 +154,16 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     && typeof newState.selfMute === 'boolean' && oldState.selfMute !== newState.selfMute;
   const streamChanged = hasChannel && typeof oldState.streaming === 'boolean'
     && typeof newState.streaming === 'boolean' && oldState.streaming !== newState.streaming;
+  const serverMuteChanged = hasChannel && typeof oldState.serverMute === 'boolean'
+    && typeof newState.serverMute === 'boolean' && oldState.serverMute !== newState.serverMute;
+  const serverDeafChanged = hasChannel && typeof oldState.serverDeaf === 'boolean'
+    && typeof newState.serverDeaf === 'boolean' && oldState.serverDeaf !== newState.serverDeaf;
 
-  if (!isJoin && !isLeave && !isMove && !muteChanged && !streamChanged) {
+  if (!isJoin && !isLeave && !isMove && !muteChanged && !streamChanged
+    && !serverMuteChanged && !serverDeafChanged) {
     return;
   }
+  const occurredAt = Date.now();
 
   if (!logChannelId) {
     console.error('Cannot send voice log: VOICE_LOG_CHANNEL_ID is not configured.');
@@ -182,17 +194,29 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     const serverSuffix = isExternalGuild
       ? ` (เซิร์ฟเวอร์: ${sourceGuildName})` : '';
     const user = `> 👤 **User:** ${member.displayName}`;
+    const selfActor = `> 🛠️ **Done by:** <@${member.id}>`;
+    const actorOptions = { guild: sourceGuild, memberId: member.id, occurredAt };
+    const [channelActor, muteActor, deafActor] = await Promise.all([
+      isMove || isLeave ? resolveVoiceActor({ ...actorOptions,
+        action: isMove ? 'move' : 'disconnect', channelId: newState.channelId }) : null,
+      serverMuteChanged ? resolveVoiceActor({ ...actorOptions, action: 'update',
+        change: { key: 'mute', old: oldState.serverMute, new: newState.serverMute } }) : null,
+      serverDeafChanged ? resolveVoiceActor({ ...actorOptions, action: 'update',
+        change: { key: 'deaf', old: oldState.serverDeaf, new: newState.serverDeaf } }) : null,
+    ]);
     const timestamp = `> 🕒 **Time:** ${time}`;
     const logs = [];
 
-    if (isJoin) logs.push(['🟢 Voice Joined', 0x57F287, [user, `> 🔊 **Channel:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
-    if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🔊 **Channel:** \`${oldChannel}\`${serverSuffix}`, '> ⏱️ **Duration:** Coming soon', timestamp]]);
-    if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 📤 **From:** \`${oldChannel}\`${serverSuffix}`, `> 📥 **To:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
-    if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
+    if (isJoin) logs.push(['🟢 Voice Joined', 0x57F287, [user, selfActor, `> 🔊 **Channel:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
+    if (isLeave) logs.push(['🔴 Voice Left', 0xED4245, [user, `> 🛠️ **Done by:** ${channelActor}`, `> 🔊 **Channel:** \`${oldChannel}\`${serverSuffix}`, '> ⏱️ **Duration:** Coming soon', timestamp]]);
+    if (isMove) logs.push(['🔄 Voice Moved', 0x5865F2, [user, `> 🛠️ **Done by:** ${channelActor}`, `> 📤 **From:** \`${oldChannel}\`${serverSuffix}`, `> 📥 **To:** \`${newChannel}\`${serverSuffix}`, timestamp]]);
+    if (muteChanged) logs.push(['🎙️ Microphone Changed', 0xFEE75C, [user, selfActor, `> 🎤 **Status:** ${newState.selfMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
+    if (serverMuteChanged) logs.push(['🎙️ Server Microphone Changed', 0xFEE75C, [user, `> 🛠️ **Done by:** ${muteActor}`, `> 🎤 **Status:** ${newState.serverMute ? 'Muted 🔇' : 'Unmuted 🎤'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
+    if (serverDeafChanged) logs.push(['🎧 Server Deafen Changed', 0xFEE75C, [user, `> 🛠️ **Done by:** ${deafActor}`, `> 🎧 **Status:** ${newState.serverDeaf ? 'Deafened 🔇' : 'Undeafened 🎧'}`, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, timestamp]]);
     if (streamChanged) {
       const started = newState.streaming;
       logs.push([started ? '📺 Stream Started' : '📺 Stream Stopped', started ? 0x1ABC9C : 0x95A5A6,
-        [user, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, started ? '> 📡 **Status:** Streaming' : '> ⏱️ **Stream Duration:** Coming soon', timestamp]]);
+        [user, selfActor, `> 🔊 **Channel:** \`${voiceChannel}\`${serverSuffix}`, started ? '> 📡 **Status:** Streaming' : '> ⏱️ **Stream Duration:** Coming soon', timestamp]]);
     }
 
     for (const [title, color, lines] of logs) {

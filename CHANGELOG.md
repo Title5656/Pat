@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a no-ping `Done by` line to voice logs, with source-server audit lookup for moderator moves, disconnects, server mute, and server deafen changes; label targetless matches as likely and unavailable or ambiguous actors as unknown.
 - Integrate cross-server research as a second room on the existing Pat bot, sharing its Discord connection, Gemini key, and deployment while keeping persona and question memory separate.
 - Add optional `PAT_RESEARCH_CHANNEL_ID`, persistent SQLite search, live source verification, and cited answers; access follows the private Discord channel permissions.
 - Route room-list and room-history questions to read-only Discord operations, paginate histories in batches of 50, and add per-user `!reset` recovery without exposing server mutation operations.

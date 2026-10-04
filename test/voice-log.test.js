@@ -54,6 +54,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
       if (id === 'discord.js') {
         return {
           Client,
+          AuditLogEvent: { MemberUpdate: 24, MemberMove: 26, MemberDisconnect: 27 },
+          PermissionFlagsBits: { ViewAuditLog: 128n },
           Partials: { Message: 'partial-message', Channel: 'partial-channel' },
           GatewayIntentBits: {
             Guilds: 1,
@@ -78,6 +80,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
       if (id === './src/chat/handle-message') {
         return { createMessageHandler: () => messageHandlerImpl ?? (async () => {}) };
       }
+      if (id === './src/voice/actor') return require('../src/voice/actor');
       if (id === './src/research/feature') {
         return { startResearch: async ({ client }) => {
           researchClients.push(client);
@@ -112,6 +115,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
     },
     URL,
     setTimeout: (callback, delay) => {
+      if (delay === 750) callback();
       if (delay === 15 * 60_000) loginTimeout = callback;
       return { delay, unref() {} };
     },
@@ -154,14 +158,187 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   };
 }
 
-function state(channelId, { bot = false, selfMute = false, selfDeaf = false, streaming = false, guildId = 'primary-guild', guildName = 'Primary' } = {}) {
+function state(channelId, { bot = false, selfMute = false, selfDeaf = false, serverMute = false, serverDeaf = false, streaming = false, guildId = 'primary-guild', guildName = 'Primary', guild } = {}) {
   return {
-    guild: { id: guildId, name: guildName },
+    guild: guild ?? { id: guildId, name: guildName },
     channelId, channel: channelId && { name: channelId === 'voice' ? 'General' : 'Gaming' },
-    selfMute, selfDeaf, streaming,
+    selfMute, selfDeaf, serverMute, serverDeaf, streaming,
     member: { id: 'user', displayName: 'Pat', user: { bot } },
   };
 }
+
+test('identifies the member who joins without pinging them', async () => {
+  const app = setup();
+  await app.emit(state(null), state('voice'));
+  assert.match(log(app).description, /\*\*Done by:\*\* <@user>/);
+});
+
+test('marks a moderator move inferred from a targetless audit entry as likely', async () => {
+  const app = setup();
+  const guild = {
+    id: 'other-guild', name: 'Friends',
+    members: { me: { permissions: { has: () => true } } },
+    fetchAuditLogs: async ({ type }) => {
+      assert.equal(type, 26);
+      return { entries: new Map([['audit', {
+        id: 'audit', action: 26, createdTimestamp: Date.now(), targetId: null,
+        executorId: 'moderator', extra: { channel: { id: 'gaming' }, count: 1 },
+      }]]) };
+    },
+  };
+  await app.emit(state('voice', { guild }), state('gaming', { guild }));
+  assert.match(log(app).description, /\*\*Done by:\*\* <@moderator> \(likely; audit log match\)/);
+  assert.match(log(app).description, /เซิร์ฟเวอร์: Friends/);
+});
+
+test('keeps the actor unknown when audit log access is unavailable', async () => {
+  const app = setup();
+  await app.emit(state('voice'), state(null));
+  assert.match(log(app).description, /\*\*Done by:\*\* Unknown/);
+});
+
+test('logs a server mute with the moderator from a member-specific audit entry', async () => {
+  const app = setup();
+  const guild = {
+    id: 'primary-guild', name: 'Primary',
+    members: { me: { permissions: { has: () => true } } },
+    fetchAuditLogs: async ({ type }) => {
+      assert.equal(type, 24);
+      return { entries: new Map([['audit', {
+        id: 'audit', action: 24, createdTimestamp: Date.now(), targetId: 'user',
+        executorId: 'moderator', changes: [{ key: 'mute', old: false, new: true }],
+      }]]) };
+    },
+  };
+  await app.emit(state('voice', { guild }), state('voice', { guild, serverMute: true }));
+  assert.equal(app.messages.length, 1);
+  assert.equal(log(app).title, '🎙️ Server Microphone Changed');
+  assert.match(log(app).description, /\*\*Done by:\*\* <@moderator>\n/);
+  assert.match(log(app).description, /\*\*Status:\*\* Muted 🔇/);
+});
+
+function auditGuild(entries, { canView = true, fetch } = {}) {
+  return {
+    id: 'primary-guild', name: 'Primary',
+    members: { me: { permissions: { has: permission => {
+      assert.equal(permission, 128n);
+      return canView;
+    } } } },
+    fetchAuditLogs: fetch ?? (async ({ type }) => ({
+      entries: new Map(entries.filter(entry => entry.action === type).map(entry => [entry.id, entry])),
+    })),
+  };
+}
+
+function moveEntry(overrides = {}) {
+  return {
+    id: 'move-audit', action: 26, createdTimestamp: 10_000, targetId: null,
+    executorId: 'moderator', extra: { channel: { id: 'gaming' }, count: 1 },
+    ...overrides,
+  };
+}
+
+test('identifies a moderator disconnect from the source guild audit log', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const guild = auditGuild([moveEntry({ action: 27, extra: { count: 1 } })]);
+  await app.emit(state('voice', { guild }), { channelId: null, member: null });
+  assert.match(log(app).description, /Done by:\*\* <@moderator> \(likely; audit log match\)/);
+});
+
+for (const [name, entries] of [
+  ['stale audit', [moveEntry({ createdTimestamp: 1_000 })]],
+  ['future audit', [moveEntry({ createdTimestamp: 20_000 })]],
+  ['different destination', [moveEntry({ extra: { channel: { id: 'another-room' }, count: 1 } })]],
+  ['different member', [moveEntry({ targetId: 'another-member' })]],
+  ['ambiguous moderators', [moveEntry(), moveEntry({ id: 'other-audit', executorId: 'another-moderator' })]],
+  ['missing executor', [moveEntry({ executorId: null })]],
+]) {
+  test(`does not blame a moderator when there is ${name}`, async () => {
+    const app = setup({ timePoints: [10_000] });
+    const guild = auditGuild(entries);
+    await app.emit(state('voice', { guild }), state('gaming', { guild }));
+    assert.match(log(app).description, /Done by:\*\* Unknown/);
+    assert.doesNotMatch(log(app).description, /<@moderator>/);
+  });
+}
+
+test('does not reuse one moderator move for a second member', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const entry = moveEntry();
+  const guild = auditGuild([entry]);
+  await Promise.all([
+    app.emit(state('voice', { guild }), state('gaming', { guild })),
+    app.emit(state('voice', { guild }), state('gaming', { guild })),
+  ]);
+  assert.equal(app.messages.filter(message => message.embeds[0].description.includes('<@moderator>')).length, 1);
+  assert.equal(app.messages.filter(message => message.embeds[0].description.includes('Done by:** Unknown')).length, 1);
+  entry.extra.count = 2;
+  await app.emit(state('voice', { guild }), state('gaming', { guild }));
+  assert.match(log(app, 2).description, /Done by:\*\* <@moderator>/);
+});
+
+test('retries when the audit entry appears after the voice update', async () => {
+  const app = setup({ timePoints: [10_000] });
+  let calls = 0;
+  const guild = auditGuild([], { fetch: async () => ({
+    entries: new Map(++calls === 1 ? [] : [['move-audit', moveEntry()]]),
+  }) });
+  await app.emit(state('voice', { guild }), state('gaming', { guild }));
+  assert.match(log(app).description, /Done by:\*\* <@moderator>/);
+});
+
+test('keeps logging when fetching the audit log fails', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const guild = auditGuild([], { fetch: async () => { throw new Error('private audit error'); } });
+  await app.emit(state('voice', { guild }), state('gaming', { guild }));
+  assert.equal(app.messages.length, 1);
+  assert.match(log(app).description, /Done by:\*\* Unknown \(audit log unavailable\)/);
+  assert.doesNotMatch(log(app).description, /private audit error/);
+});
+
+test('does not fetch an audit log without permission', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const guild = auditGuild([], { canView: false, fetch: async () => {
+    assert.fail('must not query an audit log without permission');
+  } });
+  await app.emit(state('voice', { guild }), state('gaming', { guild }));
+  assert.match(log(app).description, /Done by:\*\* Unknown \(missing View Audit Log permission\)/);
+});
+
+test('logs server deafen and undeafen using the exact member and changed value', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const entries = [moveEntry({ action: 24, targetId: 'user', changes: [{ key: 'deaf', old: false, new: true }] })];
+  const guild = auditGuild(entries);
+  await app.emit(state('voice', { guild }), state('voice', { guild, serverDeaf: true }));
+  entries[0] = moveEntry({ id: 'undeafen', action: 24, targetId: 'user', changes: [{ key: 'deaf', old: true, new: false }] });
+  await app.emit(state('voice', { guild, serverDeaf: true }), state('voice', { guild }));
+  assert.equal(app.messages.length, 2);
+  assert.equal(log(app).title, '🎧 Server Deafen Changed');
+  assert.match(log(app).description, /Done by:\*\* <@moderator>\n/);
+  assert.match(log(app).description, /Status:\*\* Deafened 🔇/);
+  assert.match(log(app, 1).description, /Status:\*\* Undeafened 🎧/);
+});
+
+test('rejects a server mute audit for the wrong member or changed value', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const guild = auditGuild([
+    moveEntry({ action: 24, targetId: 'someone-else', changes: [{ key: 'mute', old: false, new: true }] }),
+    moveEntry({ id: 'unmute', action: 24, targetId: 'user', changes: [{ key: 'mute', old: true, new: false }] }),
+  ]);
+  await app.emit(state('voice', { guild }), state('voice', { guild, serverMute: true }));
+  assert.equal(app.messages.length, 1);
+  assert.match(log(app).description, /Done by:\*\* Unknown/);
+});
+
+test('keeps self microphone and stream actions attributed to the member during a moderator move', async () => {
+  const app = setup({ timePoints: [10_000] });
+  const guild = auditGuild([moveEntry()]);
+  await app.emit(state('voice', { guild }), state('gaming', { guild, selfMute: true, streaming: true }));
+  assert.equal(app.messages.length, 3);
+  assert.match(log(app, 0).description, /Done by:\*\* <@moderator>/);
+  assert.match(log(app, 1).description, /Done by:\*\* <@user>/);
+  assert.match(log(app, 2).description, /Done by:\*\* <@user>/);
+});
 
 function log(app, index = 0) {
   assert.equal(app.messages[index].content, undefined);
@@ -176,7 +353,7 @@ test('logs a joined embed with Thai time and no mentions', async () => {
   assert.equal(app.messages.length, 1);
   assert.equal(log(app).title, '🟢 Voice Joined');
   assert.equal(log(app).color, 0x57F287);
-  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 🔊 **Channel:** `General`\n> 🕒 **Time:** 19:35:24');
+  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 🛠️ **Done by:** <@user>\n> 🔊 **Channel:** `General`\n> 🕒 **Time:** 19:35:24');
 });
 
 test('logs a left embed with the old member and placeholder duration', async () => {
@@ -185,14 +362,14 @@ test('logs a left embed with the old member and placeholder duration', async () 
   assert.equal(app.messages.length, 1);
   assert.equal(log(app).title, '🔴 Voice Left');
   assert.equal(log(app).color, 0xED4245);
-  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 🔊 **Channel:** `General`\n> ⏱️ **Duration:** Coming soon\n> 🕒 **Time:** 19:35:24');
+  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 🛠️ **Done by:** Unknown (missing View Audit Log permission)\n> 🔊 **Channel:** `General`\n> ⏱️ **Duration:** Coming soon\n> 🕒 **Time:** 19:35:24');
 });
 
 test('logs a channel move with both channel names', async () => {
   const app = setup();
   await app.emit(state('voice'), state('gaming'));
   assert.equal(log(app).title, '🔄 Voice Moved');
-  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 📤 **From:** `General`\n> 📥 **To:** `Gaming`\n> 🕒 **Time:** 19:35:24');
+  assert.equal(log(app).description, '> 👤 **User:** Pat\n> 🛠️ **Done by:** Unknown (missing View Audit Log permission)\n> 📤 **From:** `General`\n> 📥 **To:** `Gaming`\n> 🕒 **Time:** 19:35:24');
 });
 
 test('routes external guild events to the primary log channel and labels every room', async () => {
@@ -237,9 +414,9 @@ test('logs stream start and stop, with placeholder stop duration', async () => {
   await app.emit(state('voice'), state('voice', { streaming: true }));
   await app.emit(state('voice', { streaming: true }), state('voice'));
   assert.equal(log(app, 0).title, '📺 Stream Started');
-  assert.equal(log(app, 0).description, '> 👤 **User:** Pat\n> 🔊 **Channel:** `General`\n> 📡 **Status:** Streaming\n> 🕒 **Time:** 19:35:24');
+  assert.equal(log(app, 0).description, '> 👤 **User:** Pat\n> 🛠️ **Done by:** <@user>\n> 🔊 **Channel:** `General`\n> 📡 **Status:** Streaming\n> 🕒 **Time:** 19:35:24');
   assert.equal(log(app, 1).title, '📺 Stream Stopped');
-  assert.equal(log(app, 1).description, '> 👤 **User:** Pat\n> 🔊 **Channel:** `General`\n> ⏱️ **Stream Duration:** Coming soon\n> 🕒 **Time:** 19:35:24');
+  assert.equal(log(app, 1).description, '> 👤 **User:** Pat\n> 🛠️ **Done by:** <@user>\n> 🔊 **Channel:** `General`\n> ⏱️ **Stream Duration:** Coming soon\n> 🕒 **Time:** 19:35:24');
 });
 
 test('logs supported voice changes while ignoring deafen', async () => {

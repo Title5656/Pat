@@ -14,6 +14,8 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 - แสดงสาเหตุจาก Gemini ต่อท้าย fallback โดยปิดบัง key และ token ก่อนส่งเข้า Discord
 - แจ้งเข้า ออก และย้ายห้องเสียง รวมถึงเปลี่ยนสถานะไมค์ หูฟัง และเริ่ม–หยุดสตรีม
 - แสดงชื่อสมาชิก ชื่อห้อง และเวลาไทย (`Asia/Bangkok`) ใน Embed โดยไม่ ping สมาชิก
+- เพิ่ม `Done by` เพื่อแสดงผู้ทำรายการ: เข้าเสียง เปลี่ยนไมค์เอง และเริ่ม–หยุดสตรีมระบุสมาชิกเอง ส่วนย้ายห้อง ตัดสาย และปิด–เปิดไมค์หรือหูฟังโดยผู้ดูแลตรวจ Audit Log ของเซิร์ฟเวอร์ต้นทาง
+- รายการย้ายห้องและตัดสายที่ Discord ไม่ระบุสมาชิกเป้าหมายจะแสดงผู้ดูแลพร้อม `likely; audit log match` เมื่อพบรายการล่าสุดที่ตรงกันเพียงรายการเดียว หากข้อมูลไม่พอหรือไม่ชัดเจนจะแสดง `Unknown` โดยยังส่ง voice log ตามปกติ
 - ใช้เซิร์ฟเวอร์ของ `VOICE_LOG_CHANNEL_ID` เป็นเซิร์ฟเวอร์หลัก เหตุการณ์จากเซิร์ฟเวอร์อื่นจะต่อท้ายชื่อห้อง เช่น `General` (เซิร์ฟเวอร์: Friends) ทั้งห้องต้นทางและปลายทางเมื่อย้ายห้อง
 - ระยะเวลาอยู่ในห้องและระยะเวลาสตรีมแสดง `Coming soon` จนกว่าจะมีระบบเก็บเวลาเริ่มข้ามรีสตาร์ต
 - ละเว้นการเปลี่ยนสถานะกล้องที่ไม่เกี่ยวกับสตรีม
@@ -26,6 +28,7 @@ URL บน Render: https://pat-discord-bot.onrender.com/
 
 - `DISCORD_TOKEN` — token ของ Discord bot
 - `VOICE_LOG_CHANNEL_ID` — ID ของช่องในเซิร์ฟเวอร์หลักสำหรับรวม voice log จากทุกเซิร์ฟเวอร์ บอทต้องเข้าถึงช่องและมีสิทธิ์ส่งข้อความและ Embed
+- ให้บอทมีสิทธิ์ **View Audit Log** ในทุกเซิร์ฟเวอร์ที่ต้องการระบุผู้ดูแลผู้ทำรายการเสียง ([ข้อกำหนดของ Discord](https://docs.discord.com/developers/resources/audit-log#get-guild-audit-log)); ไม่ต้องเพิ่ม intent หรือ environment variable หากไม่มีสิทธิ์ ช่อง `Done by` จะแสดง `Unknown`
 - `PAT_CHAT_CHANNEL_ID` — ID ของห้องคุยกับ persona เดิมของแพท
 - `GEMINI_API_KEY` — API key จาก Google AI Studio
 - `GEMINI_MODEL` — โมเดล Gemini เช่น `gemini-flash-latest`

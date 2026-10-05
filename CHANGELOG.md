@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- On branch pim, create permission-free personal roles named only after each human member and cycle the top member to the bottom daily at midnight Bangkok time, preserving Title → Pat → Pim above the queue. Persist role ownership separately, recover roles across restarts and reconnects, reconcile joins/leaves and nickname changes, and isolate the feature to the selected server.
+
 - Add a no-ping `Done by` line to voice logs, with source-server audit lookup for moderator moves, disconnects, server mute, and server deafen changes; label targetless matches as likely and unavailable or ambiguous actors as unknown.
 - Integrate cross-server research as a second room on the existing Pat bot, sharing its Discord connection, Gemini key, and deployment while keeping persona and question memory separate.
 - Add optional `PAT_RESEARCH_CHANNEL_ID`, persistent SQLite search, live source verification, and cited answers; access follows the private Discord channel permissions.

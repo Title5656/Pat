@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl, timePoints } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl, timePoints, rolesEnabled = 'false', roleGuildId, roleStartError } = {}) {
   const messages = [];
   const errors = [];
   const logs = [];
@@ -15,6 +15,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   let clientOptions;
   let createdClient;
   const researchClients = [];
+  const roleStarts = [];
+  let rolesStopped = false;
   let loginCount = 0;
   const signals = new Map();
   const shutdownState = { deadlineCleared: false, exitCode: null };
@@ -62,6 +64,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
             GuildVoiceStates: 2,
             GuildMessages: 4,
             MessageContent: 8,
+            GuildMembers: 16,
           },
           Events: {
             ClientReady: 'ready',
@@ -84,6 +87,13 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         return { createStopwatch: () => ({ tryHandle: () => null }) };
       }
       if (id === './src/voice/actor') return require('../src/voice/actor');
+      if (id === './src/roles/rotation') {
+        return { startRoleRotation: async options => {
+          roleStarts.push(options);
+          if (roleStartError) throw roleStartError;
+          return { stop: async () => { rolesStopped = true; } };
+        } };
+      }
       if (id === './src/research/feature') {
         return { startResearch: async ({ client }) => {
           researchClients.push(client);
@@ -110,6 +120,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         GEMINI_MODEL: 'model',
         PORT: port,
         PAT_RESEARCH_CHANNEL_ID: researchChannelId,
+        PIM_ROLES_ENABLED: rolesEnabled,
+        PIM_ROLE_GUILD_ID: roleGuildId,
       },
     },
     Date: class extends Date {
@@ -129,7 +141,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   });
   return {
     messages, errors, logs, warnings, fetchedChannelIds,
-    researchClients,
+    researchClients, roleStarts,
+    get rolesStopped() { return rolesStopped; },
     shutdownState,
     emitSignal: signal => signals.get(signal)(),
     get createdClient() { return createdClient; },
@@ -349,6 +362,55 @@ function log(app, index = 0) {
   assert.equal(app.messages[index].embeds.length, 1);
   return app.messages[index].embeds[0];
 }
+
+test('Pim starts personal roles by default on its existing client with Guild Members intent', async () => {
+  const app = setup({ rolesEnabled: null, roleGuildId: 'chosen-guild' });
+  await app.emitReady();
+  assert.ok(app.clientOptions.intents.includes(16));
+  assert.equal(app.roleStarts.length, 1);
+  assert.equal(app.roleStarts[0].client, app.createdClient);
+  assert.equal(app.roleStarts[0].guildId, 'chosen-guild');
+  assert.equal(app.roleStarts[0].channelId, 'log');
+});
+
+test('disabling personal roles omits the privileged intent and the role runtime', async () => {
+  const app = setup({ rolesEnabled: 'false' });
+  await app.emitReady();
+  assert.ok(!app.clientOptions.intents.includes(16));
+  assert.equal(app.roleStarts.length, 0);
+});
+
+test('role bootstrap failure leaves research and voice logging active without leaking error text', async () => {
+  const app = setup({ rolesEnabled: 'true', researchChannelId: 'research-room',
+    roleStartError: Object.assign(new Error('private-token'), { code: 50013 }) });
+  await app.emitReady();
+  assert.equal(app.researchClients.length, 1);
+  await app.emit(state(null), state('voice'));
+  assert.equal(app.messages.length, 1);
+  assert.match(app.errors.join('\n'), /50013/);
+  assert.doesNotMatch(app.errors.join('\n'), /private-token/);
+});
+
+test('shutdown stops personal roles even when research is disabled', async () => {
+  const app = setup({ rolesEnabled: 'true' });
+  await app.emitReady();
+  await app.emitSignal('SIGTERM');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.rolesStopped, true);
+  assert.equal(app.shutdownState.exitCode, 0);
+  assert.equal(app.shutdownState.deadlineCleared, true);
+});
+
+test('research startup failure still permits role runtime shutdown', async () => {
+  const app = setup({ rolesEnabled: 'true', researchChannelId: 'research-room',
+    researchStartError: new Error('research-start-failure') });
+  await app.emitReady();
+  assert.equal(app.roleStarts.length, 1);
+  await app.emitSignal('SIGINT');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.rolesStopped, true);
+  assert.equal(app.shutdownState.exitCode, 0);
+});
 
 test('logs a joined embed with Thai time and no mentions', async () => {
   const app = setup();

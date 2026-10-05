@@ -12,6 +12,7 @@ const chatChannelId = process.env.PAT_CHAT_CHANNEL_ID;
 const stopwatchChannelId = process.env.PAT_STOPWATCH_CHANNEL_ID;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+const rolesEnabled = process.env.PIM_ROLES_ENABLED?.trim().toLowerCase() !== 'false';
 
 if (!token) {
   console.error('Error: DISCORD_TOKEN is not defined in environment variables.');
@@ -33,6 +34,7 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel],
   intents: [
     GatewayIntentBits.Guilds,
+    ...(rolesEnabled ? [GatewayIntentBits.GuildMembers] : []),
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
@@ -93,33 +95,46 @@ if (process.env.PORT) {
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-  if (!process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) return;
-  try {
-    const research = await require('./src/research/feature').startResearch({ client });
-    let stopping = false;
-    const shutdown = async () => {
-      if (stopping) return;
-      stopping = true;
-      const deadline = setTimeout(() => process.exit(1), 20000);
-      deadline.unref();
-      try {
-        await research.stop();
-        await client.destroy();
-        if (healthServer) await new Promise(resolve => healthServer.close(resolve));
-        clearTimeout(deadline);
-        process.exit(0);
-      } catch (error) {
-        console.error(`Pat shutdown failed; code=${error.code ?? error.name ?? 'unknown'}`);
-        process.exit(1);
-      }
-    };
-    process.once('SIGINT', () => { void shutdown(); });
-    process.once('SIGTERM', () => { void shutdown(); });
-  } catch (error) {
-    const reason = /^(?:(?:Missing|Invalid) (?:PAT_RESEARCH_[A-Z_]+|GEMINI_API_KEY)(?:$|:)|PAT_RESEARCH_[A-Z_]+ )/.test(error.message)
-      ? error.message : (error.code ?? error.name ?? 'unknown');
-    console.error(`Pat research could not start: ${reason}. Existing chat and voice logging remain active.`);
+  let roleRotation;
+  let research;
+  if (rolesEnabled) {
+    try {
+      roleRotation = await require('./src/roles/rotation').startRoleRotation({
+        client, guildId: process.env.PIM_ROLE_GUILD_ID, channelId: logChannelId,
+      });
+    } catch (error) {
+      console.error(`Pim personal roles could not start; code=${error.code ?? error.name ?? 'unknown'}`);
+    }
   }
+  if (process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
+    try {
+      research = await require('./src/research/feature').startResearch({ client });
+    } catch (error) {
+      const reason = /^(?:(?:Missing|Invalid) (?:PAT_RESEARCH_[A-Z_]+|GEMINI_API_KEY)(?:$|:)|PAT_RESEARCH_[A-Z_]+ )/.test(error.message)
+        ? error.message : (error.code ?? error.name ?? 'unknown');
+      console.error(`Pat research could not start: ${reason}. Existing chat and voice logging remain active.`);
+    }
+  }
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    const deadline = setTimeout(() => process.exit(1), 20000);
+    deadline.unref();
+    try {
+      await roleRotation?.stop();
+      await research?.stop();
+      await client.destroy();
+      if (healthServer) await new Promise(resolve => healthServer.close(resolve));
+      clearTimeout(deadline);
+      process.exit(0);
+    } catch (error) {
+      console.error(`Pat shutdown failed; code=${error.code ?? error.name ?? 'unknown'}`);
+      process.exit(1);
+    }
+  };
+  process.once('SIGINT', () => { void shutdown(); });
+  process.once('SIGTERM', () => { void shutdown(); });
 });
 
 client.on(Events.ShardDisconnect, (event, id) => {

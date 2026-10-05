@@ -40,6 +40,7 @@ function setup() {
     const role = { id, name, position, managed: false, editable: true,
       permissions: { bitfield: 0n }, ...extra,
       async setName(name) { this.name = name; return this; },
+      async setHoist(hoist) { this.hoist = hoist; return this; },
       async delete() { roles.delete(id); },
     };
     roles.set(id, role);
@@ -120,7 +121,7 @@ test('creates one permission-free personal role per human below Title, Pat and P
   }
   for (const options of f.creates) {
     assert.equal(options.permissions, 0n);
-    assert.equal(options.hoist, true);
+    assert.equal(options.hoist, false);
     assert.equal(options.mentionable, false);
   }
   assert.deepEqual(f.fixedOrder(), ['Title', 'Pat', 'Pim']);
@@ -154,6 +155,32 @@ test('restart recovers existing roles without duplicating or rotating the same d
   assert.equal(f.creates.length, 3);
   assert.deepEqual(f.order(), first);
   assert.equal(f.batches.length, 1);
+  await restarted.stop();
+});
+
+test('restart removes separate member groups from existing personal roles and repairs later role updates', async () => {
+  const f = setup();
+  const runtime = await start(f.options);
+  const first = f.order();
+  const owned = [A, B, C].map(id => [id, [...f.members.get(id).roles.cache.keys()][0]]);
+  await runtime.stop();
+  // Simulate roles created by the deployed version with separate groups enabled.
+  for (const role of f.roles.values()) role.hoist = true;
+  const restarted = await start(f.options);
+  assert.equal(f.creates.length, 3);
+  for (const [id, roleId] of owned) {
+    assert.deepEqual([...f.members.get(id).roles.cache.keys()], [roleId]);
+    assert.equal(f.roles.get(roleId).hoist, false);
+  }
+  for (const id of ['title', 'pat', 'pim', 'guild']) assert.equal(f.roles.get(id).hoist, true);
+  assert.deepEqual(f.order(), first);
+  assert.equal(f.batches.length, 1);
+  const role = f.roles.get(owned[0][1]);
+  role.hoist = true;
+  f.client.emit('roleUpdate', {}, { ...role, guild: f.guild });
+  await restarted.tick();
+  assert.equal(role.hoist, false);
+  assert.equal(f.creates.length, 3);
   await restarted.stop();
 });
 
@@ -197,6 +224,27 @@ test('missing Manage Roles does not mutate roles and retries after permission is
   await f.tick();
   assert.equal(f.creates.length, 3);
   await runtime.stop();
+});
+
+test('existing personal roles lose separate groups even when there is no room for a new member role', async () => {
+  const f = setup();
+  const runtime = await start(f.options);
+  await runtime.stop();
+  const owned = [A, B, C].map(id => [...f.members.get(id).roles.cache.values()][0]);
+  for (const role of owned) role.hoist = true;
+  while (f.roles.size < 250) {
+    const id = `other-${f.roles.size}`;
+    f.roles.set(id, { id, name: 'Unrelated', position: f.roles.size, hoist: true });
+  }
+  const member = f.addMember(D, 'Dave');
+  const restarted = await start(f.options);
+  assert.match(f.errors[0], /250/);
+  for (const role of owned) assert.equal(role.hoist, false);
+  for (const [id, role] of f.roles) if (id.startsWith('other-')) assert.equal(role.hoist, true);
+  assert.equal(f.creates.length, 3);
+  assert.equal(member.roles.cache.size, 0);
+  assert.equal(f.batches.length, 1);
+  await restarted.stop();
 });
 
 test('role capacity is checked before creating a partial set', async () => {

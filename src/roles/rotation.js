@@ -49,6 +49,8 @@ async function reconcile(guild, day, store) {
       await role.delete(REASON);
       personal.delete(id);
       store.remove(guild.id, id);
+    } else if (role.hoist) {
+      personal.set(id, await role.setHoist(false, REASON));
     }
   }
   const missing = members.filter(member => !personal.has(member.id));
@@ -60,7 +62,7 @@ async function reconcile(guild, day, store) {
     const name = roleName(member);
     let role = personal.get(member.id);
     if (!role) {
-      role = await guild.roles.create({ name, permissions: 0n, hoist: true,
+      role = await guild.roles.create({ name, permissions: 0n, hoist: false,
         mentionable: false, reason: REASON });
       // Persist identity before assignment, so an assignment failure cannot
       // cause a duplicate role on the next run or after a restart.

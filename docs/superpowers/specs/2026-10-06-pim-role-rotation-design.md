@@ -21,7 +21,9 @@ member and role IDs; default path `data/pim-roles.sqlite`, overridable with
 Duplicate display names still have separate roles. Renaming a member while
 the bot is offline retains that member's stored role identity on restart.
 
-Create roles with zero added permissions, hoist enabled and mentions disabled.
+Create roles with zero added permissions, hoist disabled and mentions disabled.
+Disable hoist on existing registered personal roles during reconciliation,
+including immediately after startup; leave other roles' display settings alone.
 Only role IDs in the registry belong to this feature. Restore
 missing assignments, rename personal roles with changed display names, and
 delete personal roles belonging to departed members. Refuse mutations if Pim

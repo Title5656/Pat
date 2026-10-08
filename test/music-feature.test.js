@@ -72,6 +72,23 @@ test('extractor error details never reach Discord', async () => {
   assert.match(app.replies.at(-1).content, /YouTube/);
 });
 
+test('gives different actionable replies for hosting blocks, region restrictions, and private videos', async () => {
+  const replies = [];
+  for (const code of ['YOUTUBE_BOT_BLOCKED', 'YOUTUBE_REGION_BLOCKED', 'YOUTUBE_RESTRICTED',
+    'YOUTUBE_ACCESS_DENIED', 'YOUTUBE_RATE_LIMITED']) {
+    const app = fixture();
+    app.manager.enqueue = async () => { throw Object.assign(new Error('SECRET'), { code }); };
+    await app.handle(app.interaction);
+    const content = app.replies.at(-1).content;
+    assert.doesNotMatch(content, /SECRET|คำสั่งเพลงทำงานไม่สำเร็จ/);
+    replies.push(content);
+  }
+  assert.equal(new Set(replies).size, replies.length);
+  assert.match(replies[0], /เซิร์ฟเวอร์/);
+  assert.match(replies[1], /ประเทศ/);
+  assert.match(replies[2], /เข้าสู่ระบบ|ส่วนตัว/);
+});
+
 test('unrelated application interactions are ignored', async () => {
   const app = fixture(); app.interaction.commandName = 'unrelated';
   assert.equal(await app.handle(app.interaction), false);

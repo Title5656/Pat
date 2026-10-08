@@ -6,7 +6,7 @@ const { createMusicManager } = require('../src/music/player');
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
-function setup({ resolve, open } = {}) {
+function setup({ resolve, open, entersState } = {}) {
   const players = [], connections = [], opened = [], timers = [];
   const source = {
     resolve: resolve ?? (async name => ({ title: name, url: name, duration: 30 })),
@@ -31,7 +31,7 @@ function setup({ resolve, open } = {}) {
       c.subscribe = () => {}; c.destroy = () => { c.destroyed = true; c.emit('destroyed'); };
       connections.push(c); return c;
     },
-    entersState: async value => value,
+    entersState: entersState ?? (async value => value),
   };
   const manager = createMusicManager({ source, voice, logger: { warn() {} },
     setTimer: callback => { const timer = { callback, cleared: false, unref() {} }; timers.push(timer); return timer; },
@@ -50,6 +50,19 @@ test('plays FIFO and releases the previous stream on skip', async () => {
   app.manager.skip('guild', 'voice'); await tick();
   assert.equal(app.manager.queue('guild').current.title, 'second');
   assert.equal(app.opened[0].closed, true);
+  app.manager.shutdown();
+});
+
+test('the voice player allows the same extended startup window as YouTube', async () => {
+  const waits = [];
+  const app = setup({ entersState: async (value, state, timeout) => {
+    waits.push({ state, timeout });
+    if (state === 'playing' && timeout <= 35_000) throw new Error('startup cut off before audio arrived');
+    return value;
+  } });
+  await app.enqueue('slow song'); await tick();
+  assert.equal(app.manager.queue('guild').current?.title, 'slow song');
+  assert.equal(waits.find(wait => wait.state === 'playing').timeout, 90_000);
   app.manager.shutdown();
 });
 

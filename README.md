@@ -91,12 +91,14 @@ Build บน Render ใช้ `npm ci` ตามเดิม: postinstall ดา
 
 Log เพลงแยกสาเหตุเป็นรหัสที่ปลอดภัย โดยไม่พิมพ์ stderr, cookie, token หรือลิงก์เสียงชั่วคราว: `YOUTUBE_BOT_BLOCKED` คือ YouTube ขอให้โฮสต์ยืนยันว่าไม่ใช่บอต, `YOUTUBE_REGION_BLOCKED` คือข้อจำกัดประเทศ, `YOUTUBE_RESTRICTED` คือวิดีโอส่วนตัวหรือต้องเข้าสู่ระบบ, `YOUTUBE_ACCESS_DENIED` คือ HTTP 403 และ `YOUTUBE_RATE_LIMITED` คือ HTTP 429 ส่วน `EXTRACTOR_FAILED` ให้ตรวจการติดตั้ง yt-dlp และ JavaScript runtime บนโฮสต์ รหัส `YOUTUBE_UNAVAILABLE` ยังใช้เมื่อไม่พบข้อความที่ระบุสาเหตุได้ การเปลี่ยนเพลงหรือ redeploy ไม่รับประกันว่าจะแก้ข้อจำกัดของ IP ได้ และการอัปเกรดแผน Render เพื่อเปิด Shell ไม่รับประกันว่า YouTube จะอนุญาต
 
+การค้นเพลงและการเตรียมเสียงแรกรอได้ขั้นตอนละ 90 วินาที เครื่องเล่นใช้เวลารอเริ่มเล่นเท่ากัน และ `/skip` หรือ `/stop` ยังยกเลิกได้ทันที หากหมดเวลา log `Pim music startup failed` จะระบุ `phase` (metadata/audio), `stage` (เช่น javascript/download/decoding), เวลาที่ใช้, มีการส่งไฟล์ cookies ให้ yt-dlp หรือไม่ และได้รับข้อมูลเสียงจาก YouTube แล้วหรือยัง โดยไม่พิมพ์เนื้อหาไฟล์หรือ URL เสียง ข้อมูลนี้ใช้แยกการรอ YouTube ออกจากการรอ FFmpeg; การเพิ่มเวลารอไม่ได้ยืนยันว่าผ่านข้อจำกัด YouTube แล้ว
+
 ### ใช้ cookies บน Render เมื่อ YouTube ขอให้เข้าสู่ระบบ
 
 การใช้บัญชีกับ yt-dlp อาจทำให้บัญชีถูกจำกัดหรือระงับ และไม่รับประกันว่าจะผ่านข้อจำกัด IP ของ YouTube ควรใช้บัญชีแยก อ่าน [คำแนะนำจาก yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies) ก่อนตั้งค่า อย่าส่ง cookies ลงแชตหรือใส่ใน Git
 
 1. เปิดหน้าต่าง Private/Incognito แล้วเข้าสู่ YouTube ด้วยบัญชีแยก ในหน้าต่างนั้นเปิด `https://www.youtube.com/robots.txt` ใช้ส่วนขยายส่งออก cookies เฉพาะ `youtube.com` เป็นรูปแบบ Netscape จากนั้นปิดหน้าต่าง Private นั้น ไม่ใช้วิธี export cookies ของทุกเว็บไซต์ ดู [ส่วนขยายและรูปแบบไฟล์ที่ yt-dlp รองรับ](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp)
-2. ใน service เดิมบน Render เปิด **Environment → Secret Files → Add Secret File** ตั้ง Filename เป็น `youtube-cookies.txt` แล้วใส่เนื้อหาไฟล์ด้วยตัวเอง บรรทัดแรกต้องเป็น `# Netscape HTTP Cookie File` หรือ `# HTTP Cookie File` บันทึกและ deploy ตาม [คู่มือ Secret Files ของ Render](https://render.com/docs/configure-environment-variables#secret-files)
+2. ใน service เดิมบน Render เปิด **Environment → Secret Files → Add file** ตั้ง Filename เป็น `youtube-cookies.txt` แล้วใส่เนื้อหาไฟล์ด้วยตัวเอง บรรทัดแรกต้องเป็น `# Netscape HTTP Cookie File` หรือ `# HTTP Cookie File` บันทึกและ deploy ตาม [คู่มือ Secret Files ของ Render](https://render.com/docs/configure-environment-variables#secret-files)
 3. บอตอ่าน `/etc/secrets/youtube-cookies.txt` อัตโนมัติ ไม่ต้องเพิ่ม Environment Variable หรือเปลี่ยน Discord token หากใช้ชื่อไฟล์หรือโฮสต์อื่น กำหนด `PIM_YOUTUBE_COOKIES_FILE` เป็น path ของไฟล์แทน
 4. ลอง `/play` บนบอตจริงและตรวจ log ถ้าขึ้น `YOUTUBE_COOKIES_INVALID` ให้ตรวจชื่อไฟล์และรูปแบบ; ถ้ายังขึ้น `YOUTUBE_BOT_BLOCKED` แสดงว่าการใช้ cookies ยังไม่ผ่านการปฏิเสธจาก YouTube ต้องตรวจเครือข่ายหรือการยืนยันเพิ่มเติม ไม่ถือว่าตั้งค่าสำเร็จเพียงเพราะไฟล์มีอยู่
 

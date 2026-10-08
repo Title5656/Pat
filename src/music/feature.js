@@ -145,7 +145,7 @@ async function startMusic({ client, channelId = process.env.PAT_STOPWATCH_CHANNE
   const announce = event => channel.send(payload(event.type === 'playing'
     ? `🎶 Pim กำลังเล่น ${song(event.track)}`
     : `⚠️ ${event.track ? `${title(event.track)}: ` : ''}${errorText(event.code)}`));
-  manager ||= createMusicManager({ source: source ?? createYouTubeSource(), botUserId: client.user.id, logger });
+  manager ||= createMusicManager({ source: source ?? createYouTubeSource({ logger }), botUserId: client.user.id, logger });
   try {
     for (const command of commands) await channel.guild.commands.create(command);
   } catch (error) { manager.shutdown(); throw error; }

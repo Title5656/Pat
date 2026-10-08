@@ -76,6 +76,50 @@ test('extractor failures expose a safe error and never signed URLs or stderr', a
   await assert.rejects(source.resolve('Song'), error => error.code === 'YOUTUBE_UNAVAILABLE' && !/SECRET|signed-url/.test(error.message));
 });
 
+test('classifies YouTube refusals and extractor failures without exposing stderr', async () => {
+  const cases = [
+    ["Sign in to confirm you're not a bot", 'YOUTUBE_BOT_BLOCKED'],
+    ['Sign in to confirm you’re not a bot', 'YOUTUBE_BOT_BLOCKED'],
+    ['The uploader has not made this video available in your country', 'YOUTUBE_REGION_BLOCKED'],
+    ['Private video. Sign in if you have been granted access', 'YOUTUBE_RESTRICTED'],
+    ['Sign in to confirm your age', 'YOUTUBE_RESTRICTED'],
+    ['HTTP Error 403: Forbidden', 'YOUTUBE_ACCESS_DENIED'],
+    ['HTTP Error 429: Too Many Requests', 'YOUTUBE_RATE_LIMITED'],
+    ['Unable to download webpage: The read operation timed out', 'YOUTUBE_TIMEOUT'],
+    ['No supported JavaScript runtime could be found. Requested format is not available', 'EXTRACTOR_FAILED'],
+  ];
+  for (const [diagnostic, code] of cases) {
+    const source = createYouTubeSource({ ytDlpPath: '/yt-dlp', ffmpegPath: '/ffmpeg', spawn: () => {
+      const child = subprocess();
+      queueMicrotask(() => {
+        child.stderr.write(`SECRET_TOKEN https://audio.example/?signature=SECRET ${diagnostic}`);
+        child.emit('close', 1);
+      });
+      return child;
+    } });
+    await assert.rejects(source.resolve('Song'), error => {
+      assert.equal(error.code, code, diagnostic);
+      assert.equal(error.message, code);
+      assert.doesNotMatch(JSON.stringify(error), /SECRET|signature|audio\.example/);
+      return true;
+    });
+  }
+});
+
+test('detects a bot challenge split across stderr chunks after large output', async () => {
+  const source = createYouTubeSource({ ytDlpPath: '/yt-dlp', ffmpegPath: '/ffmpeg', spawn: () => {
+    const child = subprocess();
+    queueMicrotask(() => {
+      child.stderr.write('x'.repeat(100_000));
+      child.stderr.write('Sign in to confirm you');
+      child.stderr.write("'re not a bot");
+      child.emit('close', 1);
+    });
+    return child;
+  } });
+  await assert.rejects(source.resolve('Song'), { code: 'YOUTUBE_BOT_BLOCKED' });
+});
+
 test('audio is piped to FFmpeg and close terminates both subprocesses', async () => {
   const children = [];
   const source = createYouTubeSource({ ytDlpPath: '/yt-dlp', ffmpegPath: '/ffmpeg', spawn: (_bin, args) => {
@@ -102,5 +146,31 @@ test('audio process errors reach the stream and cancel the other process', async
   const error = new Promise(resolve => opened.stream.once('error', resolve));
   children[0].emit('close', 1);
   assert.equal((await error).code, 'YOUTUBE_UNAVAILABLE');
+  assert.ok(children.every(child => child.killed));
+});
+
+test('audio extraction preserves the classified refusal and cleans up both children', async () => {
+  const children = [];
+  const source = createYouTubeSource({ ytDlpPath: '/yt-dlp', ffmpegPath: '/ffmpeg', spawn: () => {
+    const child = subprocess(); children.push(child); return child;
+  } });
+  const opened = await source.open({ url: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  const error = new Promise(resolve => opened.stream.once('error', resolve));
+  children[0].stderr.write("ERROR: Sign in to confirm you're not a bot https://audio.example/?signature=SECRET");
+  children[0].emit('close', 1);
+  assert.equal((await error).code, 'YOUTUBE_BOT_BLOCKED');
+  assert.ok(children.every(child => child.killed));
+});
+
+test('a decoder failure after a YouTube refusal keeps the original cause', async () => {
+  const children = [];
+  const source = createYouTubeSource({ ytDlpPath: '/yt-dlp', ffmpegPath: '/ffmpeg', spawn: () => {
+    const child = subprocess(); children.push(child); return child;
+  } });
+  const opened = await source.open({ url: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  const error = new Promise(resolve => opened.stream.once('error', resolve));
+  children[0].stderr.write('ERROR: HTTP Error 403: Forbidden');
+  children[1].emit('close', 1);
+  assert.equal((await error).code, 'YOUTUBE_ACCESS_DENIED');
   assert.ok(children.every(child => child.killed));
 });

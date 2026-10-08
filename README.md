@@ -89,6 +89,8 @@ Build บน Render ใช้ `npm ci` ตามเดิม: postinstall ดา
 
 หากบอตเข้าเสียงได้แต่ YouTube เล่นไม่ได้ ให้ดูข้อความตอบคำสั่งและ log: YouTube อาจจำกัด IP ของโฮสต์หรือจำกัดวิดีโอนั้น การทดสอบ unit ไม่ยืนยันว่าเครือข่าย production เล่นเสียงได้ ต้องลอง `/play` บน service ที่ deploy จริง ไม่มีการเก็บเพลงลงดิสก์หรือใช้ cookie บัญชี YouTube
 
+Log เพลงแยกสาเหตุเป็นรหัสที่ปลอดภัย โดยไม่พิมพ์ stderr, cookie, token หรือลิงก์เสียงชั่วคราว: `YOUTUBE_BOT_BLOCKED` คือ YouTube ขอให้โฮสต์ยืนยันว่าไม่ใช่บอต, `YOUTUBE_REGION_BLOCKED` คือข้อจำกัดประเทศ, `YOUTUBE_RESTRICTED` คือวิดีโอส่วนตัวหรือต้องเข้าสู่ระบบ, `YOUTUBE_ACCESS_DENIED` คือ HTTP 403 และ `YOUTUBE_RATE_LIMITED` คือ HTTP 429 ส่วน `EXTRACTOR_FAILED` ให้ตรวจการติดตั้ง yt-dlp และ JavaScript runtime บนโฮสต์ รหัส `YOUTUBE_UNAVAILABLE` ยังใช้เมื่อไม่พบข้อความที่ระบุสาเหตุได้ การเปลี่ยนเพลงหรือ redeploy ไม่รับประกันว่าจะแก้ข้อจำกัดของ IP ได้ และการอัปเกรดแผน Render เพื่อเปิด Shell ไม่รับประกันว่า YouTube จะอนุญาต
+
 ## เทคโนโลยีและโครงสร้าง
 
 ใช้ Node.js 24, discord.js v14 และ Google Gen AI SDK ความจำบทสนทนาจะหายเมื่อโปรเซสรีสตาร์ต ส่วนฟีเจอร์ค้นข้อมูลใช้ SQLite เก็บดัชนีข้อความใน `data/research.sqlite` หรือ path ที่กำหนดบน persistent disk

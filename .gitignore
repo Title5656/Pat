@@ -9,3 +9,5 @@ data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+cookies.txt
+*cookies*.txt

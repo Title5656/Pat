@@ -27,6 +27,14 @@ test('accepts only playable public video metadata and canonical URLs', () => {
   }
 });
 
+test('account cookies do not enable private, members-only, or age-restricted tracks', () => {
+  for (const restriction of [{ availability: 'private' }, { availability: 'subscriber_only' },
+    { availability: 'needs_auth' }, { availability: 'premium_only' }, { age_limit: 18 }]) {
+    assert.throws(() => parseTrack({ id: 'abcdefghijk', title: 'Restricted', ...restriction }),
+      { code: 'YOUTUBE_RESTRICTED' });
+  }
+});
+
 function subprocess() {
   const child = new EventEmitter();
   child.stdout = new PassThrough();

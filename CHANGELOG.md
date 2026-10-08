@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Pim YouTube music through `/play`, `/queue`, `/skip`, and `/stop` in `PAT_STOPWATCH_CHANNEL_ID`, with per-guild queues, same-room controls, idle/empty-room disconnect, cancellation and subprocess cleanup, DAVE-compatible voice, and checksum-verified yt-dlp build setup.
+
 - Disable separate member-list groups for Pim's personal roles, including existing registered roles on startup, while preserving the daily role queue and other roles' display settings.
 - On branch pim, create permission-free personal roles named only after each human member and cycle the top member to the bottom daily at midnight Bangkok time, preserving Title → Pat → Pim above the queue. Persist role ownership separately, recover roles across restarts and reconnects, reconcile joins/leaves and nickname changes, and isolate the feature to the selected server.
 

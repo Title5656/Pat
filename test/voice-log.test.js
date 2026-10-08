@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 const source = readFileSync(require.resolve('../index.js'), 'utf8');
 
-function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl, timePoints, rolesEnabled = 'false', roleGuildId, roleStartError } = {}) {
+function setup({ sendable = true, fetchError, sendError, port, researchChannelId, researchStartError, destroyImpl, loginImpl, messageHandlerImpl, timePoints, rolesEnabled = 'false', roleGuildId, roleStartError, musicEnabled = 'false', musicStartError, stopwatchChannelId } = {}) {
   const messages = [];
   const errors = [];
   const logs = [];
@@ -16,6 +16,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   let createdClient;
   const researchClients = [];
   const roleStarts = [];
+  const musicStarts = [];
+  let musicStopped = false;
   let rolesStopped = false;
   let loginCount = 0;
   const signals = new Map();
@@ -101,6 +103,13 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
           return { stop: async () => {} };
         } };
       }
+      if (id === './src/music/feature') {
+        return { startMusic: async options => {
+          musicStarts.push(options);
+          if (musicStartError) throw musicStartError;
+          return { stop: async () => { musicStopped = true; } };
+        } };
+      }
       if (id === 'node:http') {
         return { createServer: (handler) => {
           httpHandler = handler;
@@ -122,6 +131,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         PAT_RESEARCH_CHANNEL_ID: researchChannelId,
         PIM_ROLES_ENABLED: rolesEnabled,
         PIM_ROLE_GUILD_ID: roleGuildId,
+        PIM_MUSIC_ENABLED: musicEnabled,
+        PAT_STOPWATCH_CHANNEL_ID: stopwatchChannelId,
       },
     },
     Date: class extends Date {
@@ -141,7 +152,8 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
   });
   return {
     messages, errors, logs, warnings, fetchedChannelIds,
-    researchClients, roleStarts,
+    researchClients, roleStarts, musicStarts,
+    get musicStopped() { return musicStopped; },
     get rolesStopped() { return rolesStopped; },
     shutdownState,
     emitSignal: signal => signals.get(signal)(),
@@ -588,6 +600,29 @@ test('research attaches to the same Pat connection only after Discord is ready',
   assert.deepEqual(app.researchClients, [app.createdClient]);
   assert.equal(app.loginCount, 1);
   assert.deepEqual(Array.from(app.clientOptions.partials), ['partial-message', 'partial-channel']);
+});
+
+test('music uses the same client and PAT_STOPWATCH_CHANNEL_ID and stops on shutdown', async () => {
+  const app = setup({ musicEnabled: 'true', stopwatchChannelId: 'timer-room' });
+  assert.equal(app.musicStarts.length, 0);
+  await app.emitReady();
+  assert.equal(app.musicStarts.length, 1);
+  assert.equal(app.musicStarts[0].client, app.createdClient);
+  assert.equal(app.musicStarts[0].channelId, 'timer-room');
+  app.emitSignal('SIGTERM');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(app.musicStopped, true);
+  assert.equal(app.shutdownState.exitCode, 0);
+});
+
+test('music startup failure does not disable existing chat or voice logging', async () => {
+  const app = setup({ musicEnabled: 'true', musicStartError: new Error('private token') });
+  await app.emitReady();
+  assert.match(app.errors.join('\n'), /Pim music/);
+  assert.doesNotMatch(app.errors.join('\n'), /private token/);
+  assert.equal(app.hasListener('message'), true);
+  await app.emit(state(null), state('voice'));
+  assert.equal(app.messages.length, 1);
 });
 
 test('keeps login alive beyond the old fifteen-minute deadline', async () => {

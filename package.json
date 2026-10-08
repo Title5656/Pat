@@ -9,11 +9,21 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env index.js",
+    "postinstall": "node --env-file-if-exists=.env scripts/setup-music.js",
+    "music:setup": "node --env-file-if-exists=.env scripts/setup-music.js",
+    "check:music": "node --check src/music/source.js && node --check src/music/player.js && node --check src/music/feature.js && node --check scripts/setup-music.js",
     "check": "node --check index.js && node --check src/voice/actor.js && node --check src/roles/rotation.js && node --check src/roles/store.js && node --check src/chat/persona.js && node --check src/chat/memory.js && node --check src/chat/conversation.js && node --check src/chat/gemini-client.js && node --check src/chat/handle-message.js && node --check src/chat/stopwatch.js && node --check src/research/feature.js && node --check src/research/limits.js && node --check src/research/config.js && node --check src/research/store.js && node --check src/research/discord-source.js && node --check src/research/indexer.js && node --check src/research/persona.js && node --check src/research/gemini.js && node --check src/research/commands.js && node --check src/research/assistant.js && node --check src/research/runtime.js",
-    "test": "node --test"
+    "test": "node --test",
+    "postcheck": "npm run check:music"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "@google/genai": "^2.23.0",
-    "discord.js": "^14.18.0"
+    "discord.js": "^14.18.0",
+    "ffmpeg-static": "^5.3.0",
+    "opusscript": "^0.1.1"
+  },
+  "allowScripts": {
+    "ffmpeg-static@5.3.0": true
   }
 }

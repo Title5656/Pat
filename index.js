@@ -97,6 +97,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
   let roleRotation;
   let research;
+  let music;
   if (rolesEnabled) {
     try {
       roleRotation = await require('./src/roles/rotation').startRoleRotation({
@@ -115,6 +116,13 @@ client.once(Events.ClientReady, async (readyClient) => {
       console.error(`Pat research could not start: ${reason}. Existing chat and voice logging remain active.`);
     }
   }
+  if (process.env.PIM_MUSIC_ENABLED?.trim().toLowerCase() !== 'false') {
+    try {
+      music = await require('./src/music/feature').startMusic({ client, channelId: stopwatchChannelId?.trim() });
+    } catch (error) {
+      console.error(`Pim music could not start; code=${error.code ?? error.name ?? 'unknown'}`);
+    }
+  }
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
@@ -124,6 +132,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     try {
       await roleRotation?.stop();
       await research?.stop();
+      await music?.stop();
       await client.destroy();
       if (healthServer) await new Promise(resolve => healthServer.close(resolve));
       clearTimeout(deadline);

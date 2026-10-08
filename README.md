@@ -73,6 +73,22 @@ PAT_STOPWATCH_CHANNEL_ID=ใส่_ID_ห้องจับเวลา
 
 บน Render ใช้ root directory ของ repo เดิม, build `npm ci`, start `npm start`, Node 24 และ health path `/health` หากต้องการเก็บดัชนีข้าม redeploy ให้แนบ persistent disk แล้วตั้ง `PAT_RESEARCH_DATABASE_PATH=/var/data/research.sqlite` ดู [วิธีตั้งห้องและขอบเขตการค้น](docs/research.md)
 
+## เพลงจาก YouTube ในห้องจับเวลา
+
+บน branch `pim` ใช้ `PAT_STOPWATCH_CHANNEL_ID` เดิมเป็นห้องคำสั่งเพลงและแจ้งเพลงที่กำลังเล่น โดย Pim เข้าห้องเสียงที่ผู้สั่งอยู่ ไม่ต้องเพิ่มบอตหรือเซิร์ฟเวอร์เพลงแยก:
+
+- `/play query:<ลิงก์ YouTube หรือชื่อเพลง>` เล่นวิดีโอหนึ่งเพลง หรือค้นหาแล้วเล่นผลลัพธ์แรก เพิ่มเพลงต่อท้ายคิวได้
+- `/queue` ดูเพลงปัจจุบันและคิว 10 เพลงแรก
+- `/skip` ข้ามเพลง และ `/stop` หยุด ล้างคิว และออกจากห้องเสียง
+
+Pim ต้องมี **View Channel, Connect, Speak** ในห้องเสียง และ **View Channel, Send Messages** ในห้อง `PAT_STOPWATCH_CHANNEL_ID` คำสั่งต้องเรียกจากห้องนี้; คนสั่งเพิ่ม/ข้าม/หยุดเพลงต้องอยู่ห้องเสียงเดียวกับ Pim คิวรอได้สูงสุด 25 เพลง รวมคำขอที่กำลังค้นหา Pim ออกหลังว่าง 60 วินาทีหรือไม่มีคนฟัง 60 วินาที คิวหายเมื่อรีสตาร์ต เล่นได้เฉพาะวิดีโอสาธารณะปกติ ไม่รองรับไลฟ์หรือวิดีโอที่ต้องเข้าสู่ระบบ และลิงก์ที่มี playlist จะเล่นเฉพาะวิดีโอที่ระบุ
+
+เชิญบอตด้วย scope `bot` และ `applications.commands` หากยังไม่เห็น slash command ตั้ง `PIM_MUSIC_ENABLED=false` เพื่อปิดเพลง ส่วนคำสั่งจับเวลาเดิมยังทำงานตามเดิม
+
+Build บน Render ใช้ `npm ci` ตามเดิม: postinstall ดาวน์โหลด yt-dlp เวอร์ชัน `2026.08.19` จาก release ทางการ ตรวจ SHA-256 และเก็บใน `.tools/`; FFmpeg ติดตั้งผ่าน `ffmpeg-static` รัน `npm run music:setup` เพื่อติดตั้ง yt-dlp ใหม่ได้ ใช้ Node.js 24 และ voice library ที่รองรับ DAVE หรือกำหนด `PIM_YTDLP_PATH`/`PIM_FFMPEG_PATH` เป็น executable บนโฮสต์เอง การส่งเสียงต้องเชื่อมต่อ UDP ไปยัง Discord ได้
+
+หากบอตเข้าเสียงได้แต่ YouTube เล่นไม่ได้ ให้ดูข้อความตอบคำสั่งและ log: YouTube อาจจำกัด IP ของโฮสต์หรือจำกัดวิดีโอนั้น การทดสอบ unit ไม่ยืนยันว่าเครือข่าย production เล่นเสียงได้ ต้องลอง `/play` บน service ที่ deploy จริง ไม่มีการเก็บเพลงลงดิสก์หรือใช้ cookie บัญชี YouTube
+
 ## เทคโนโลยีและโครงสร้าง
 
 ใช้ Node.js 24, discord.js v14 และ Google Gen AI SDK ความจำบทสนทนาจะหายเมื่อโปรเซสรีสตาร์ต ส่วนฟีเจอร์ค้นข้อมูลใช้ SQLite เก็บดัชนีข้อความใน `data/research.sqlite` หรือ path ที่กำหนดบน persistent disk
@@ -83,6 +99,8 @@ Pat/
 ├── src/chat/                # คำสั่ง คาแรกเตอร์ memory และ Gemini adapter
 ├── src/research/            # ฟีเจอร์ค้นข้อความ ใช้ Discord client และ Gemini key เดิม
 ├── src/roles/               # Role ส่วนตัวของ Pim และคิวหมุนเวียนรายวัน
+├── src/music/               # คิวเพลง การดึงเสียง YouTube และ slash commands
+├── scripts/setup-music.js   # ติดตั้ง yt-dlp และตรวจ checksum ตอน build
 ├── test/                    # ทดสอบ voice logger และระบบแชต
 ├── .github/workflows/      # งานอัตโนมัติ รวมถึง CI ตรวจโค้ดและเทสต์
 ├── .env.example            # ตัวอย่างตัวแปรตั้งค่า

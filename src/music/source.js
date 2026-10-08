@@ -1,6 +1,7 @@
 const { spawn: spawnProcess } = require('node:child_process');
 const { PassThrough } = require('node:stream');
 const path = require('node:path');
+const { configuredCookieFile, prepareCookieJar } = require('./cookies');
 
 function musicError(code) {
   const error = new Error(code);
@@ -59,6 +60,9 @@ function parseTrack(metadata) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(item?.id ?? '') || typeof item.title !== 'string' || !item.title.trim()) {
     throw musicError('YOUTUBE_UNAVAILABLE');
   }
+  if ((item.availability && !['public', 'unlisted'].includes(item.availability)) || item.age_limit >= 18) {
+    throw musicError('YOUTUBE_RESTRICTED');
+  }
   if (item.is_live || ['is_live', 'is_upcoming', 'post_live'].includes(item.live_status)) {
     throw musicError('LIVE_UNSUPPORTED');
   }
@@ -69,7 +73,7 @@ function parseTrack(metadata) {
 
 function createYouTubeSource({ ytDlpPath = process.env.PIM_YTDLP_PATH
   || path.join(__dirname, '../../.tools', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'),
-  ffmpegPath, spawn = spawnProcess, timeoutMs = 30_000 } = {}) {
+  ffmpegPath, cookieFile = configuredCookieFile(), spawn = spawnProcess, timeoutMs = 30_000 } = {}) {
   ffmpegPath ||= process.env.PIM_FFMPEG_PATH || require('ffmpeg-static');
   const common = ['--ignore-config', '--no-cache-dir', '--no-playlist',
     '--socket-timeout', '15', '--retries', '1', '--extractor-retries', '1', '--force-ipv4',
@@ -87,10 +91,12 @@ function createYouTubeSource({ ytDlpPath = process.env.PIM_YTDLP_PATH
     async resolve(query, { signal } = {}) {
       const target = normalizeQuery(query);
       if (signal?.aborted) throw aborted();
+      const cookies = prepareCookieJar(cookieFile);
       return new Promise((resolve, reject) => {
         let child;
-        try { child = spawn(ytDlpPath, [...common, '--dump-single-json', '--skip-download', '-f', 'bestaudio/best', '--', target], options); }
-        catch { reject(musicError('EXTRACTOR_FAILED')); return; }
+        try { child = spawn(ytDlpPath, [...common, ...cookies.args, '--dump-single-json', '--skip-download', '-f', 'bestaudio/best', '--', target], options); }
+        catch { cookies.cleanup(); reject(musicError('EXTRACTOR_FAILED')); return; }
+        child.once('close', cookies.cleanup);
         let output = '';
         let settled = false;
         const timer = setTimeout(() => finish(musicError('YOUTUBE_TIMEOUT')), timeoutMs);
@@ -124,6 +130,7 @@ function createYouTubeSource({ ytDlpPath = process.env.PIM_YTDLP_PATH
     async open(track, { signal } = {}) {
       const target = normalizeQuery(track.url);
       if (signal?.aborted) throw aborted();
+      const cookies = prepareCookieJar(cookieFile);
       const stream = new PassThrough();
       let extractor;
       let decoder;
@@ -148,10 +155,11 @@ function createYouTubeSource({ ytDlpPath = process.env.PIM_YTDLP_PATH
       }
       function cancel() { close(); }
       try {
-        extractor = spawn(ytDlpPath, [...common, '-f', 'bestaudio/best', '-o', '-', '--', target], options);
+        extractor = spawn(ytDlpPath, [...common, ...cookies.args, '-f', 'bestaudio/best', '-o', '-', '--', target], options);
+        extractor.once('close', cookies.cleanup);
         decoder = spawn(ffmpegPath, ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
           '-vn', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'], options);
-      } catch { close(); throw musicError('EXTRACTOR_FAILED'); }
+      } catch { close(); if (!extractor) cookies.cleanup(); throw musicError('EXTRACTOR_FAILED'); }
       const failureCode = collectYouTubeFailure(extractor);
       decoder.stderr.resume();
       extractor.stdout.pipe(decoder.stdin);

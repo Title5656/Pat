@@ -18,6 +18,7 @@ const errors = {
   YOUTUBE_RESTRICTED: 'วิดีโอนี้เป็นส่วนตัว หรือ YouTube กำหนดให้เข้าสู่ระบบก่อนค่ะ ลองวิดีโอสาธารณะที่ไม่จำกัดอายุนะคะ',
   YOUTUBE_ACCESS_DENIED: 'YouTube ปฏิเสธการดึงเสียงด้วย HTTP 403 ค่ะ ผู้ดูแลต้องตรวจตัวดึงเสียงและการเข้าถึง YouTube จากเซิร์ฟเวอร์บอตนะคะ',
   YOUTUBE_RATE_LIMITED: 'YouTube จำกัดจำนวนคำขอจากเซิร์ฟเวอร์บอตค่ะ รอสักพักแล้วค่อยลองใหม่นะคะ',
+  YOUTUBE_COOKIES_INVALID: 'ไฟล์ cookies ของ YouTube บนเซิร์ฟเวอร์บอตไม่พร้อมค่ะ ผู้ดูแลตรวจ Render Secret File ชื่อ youtube-cookies.txt และรูปแบบ Netscape นะคะ',
   EXTRACTOR_FAILED: 'ระบบดึงเสียง YouTube ยังไม่พร้อมค่ะ ตรวจการติดตั้ง yt-dlp บนเซิร์ฟเวอร์บอตนะคะ',
   LIVE_UNSUPPORTED: 'ตอนนี้เล่นได้เฉพาะวิดีโอ YouTube ปกติ ยังไม่รองรับไลฟ์ค่ะ',
   YOUTUBE_TIMEOUT: 'YouTube โหลดนานเกินไปค่ะ ลองใหม่อีกครั้งนะคะ',

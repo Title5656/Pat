@@ -1,8 +1,8 @@
-const { musicError } = require('./source');
+const { musicError, DEFAULT_STARTUP_TIMEOUT_MS } = require('./source');
 
 function createMusicManager({ source, voice = require('@discordjs/voice'), botUserId,
   logger = console, setTimer = setTimeout, clearTimer = clearTimeout,
-  idleMs = 60_000, maxQueue = 25 } = {}) {
+  idleMs = 60_000, maxQueue = 25, startupTimeoutMs = DEFAULT_STARTUP_TIMEOUT_MS } = {}) {
   const sessions = new Map();
   let stopping = false;
 
@@ -88,7 +88,7 @@ function createMusicManager({ source, voice = require('@discordjs/voice'), botUs
         session.player.play(voice.createAudioResource(audio.stream, {
           inputType: voice.StreamType.Raw, metadata: entry,
         }));
-        await voice.entersState(session.player, voice.AudioPlayerStatus.Playing, 30_000);
+        await voice.entersState(session.player, voice.AudioPlayerStatus.Playing, startupTimeoutMs);
         if (active(session) && session.current === entry) notify(session, { type: 'playing', track: entry.track });
       } catch (error) { finish(session, entry, error); }
     })();

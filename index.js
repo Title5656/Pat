@@ -81,9 +81,13 @@ const resolveVoiceActor = createVoiceActorResolver({
   wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
 });
 
+const adminServices = {};
+const adminHandler = require('./src/admin/handler').createAdminHandler({ client, services: adminServices,
+  apiKey: process.env.PIM_ADMIN_API_KEY?.trim(), env: process.env });
 let healthServer;
 if (process.env.PORT) {
   healthServer = require('node:http').createServer((req, res) => {
+    if ((req.url ?? '').split('?')[0].startsWith('/admin/')) { void adminHandler(req, res); return; }
     console.log(`HTTP REQ ${req.method} ${req.url}`);
     if (req.url === '/ready') console.log(`Discord gateway status=${client.ws?.status ?? 'unknown'}`);
     res.once('finish', () => console.log(`HTTP RES ${req.method} ${req.url} ${res.statusCode}`));
@@ -103,6 +107,7 @@ client.once(Events.ClientReady, async (readyClient) => {
       roleRotation = await require('./src/roles/rotation').startRoleRotation({
         client, guildId: process.env.PIM_ROLE_GUILD_ID, channelId: logChannelId,
       });
+      adminServices.roleRotation = roleRotation;
     } catch (error) {
       console.error(`Pim personal roles could not start; code=${error.code ?? error.name ?? 'unknown'}`);
     }
@@ -110,6 +115,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   if (process.env.PAT_RESEARCH_CHANNEL_ID?.trim()) {
     try {
       research = await require('./src/research/feature').startResearch({ client });
+      adminServices.research = research;
     } catch (error) {
       const reason = /^(?:(?:Missing|Invalid) (?:PAT_RESEARCH_[A-Z_]+|GEMINI_API_KEY)(?:$|:)|PAT_RESEARCH_[A-Z_]+ )/.test(error.message)
         ? error.message : (error.code ?? error.name ?? 'unknown');
@@ -119,6 +125,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   if (process.env.PIM_MUSIC_ENABLED?.trim().toLowerCase() !== 'false') {
     try {
       music = await require('./src/music/feature').startMusic({ client, channelId: stopwatchChannelId?.trim() });
+      adminServices.music = music;
     } catch (error) {
       console.error(`Pim music could not start; code=${error.code ?? error.name ?? 'unknown'}`);
     }

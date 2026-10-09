@@ -89,6 +89,7 @@ function setup({ sendable = true, fetchError, sendError, port, researchChannelId
         return { createStopwatch: () => ({ tryHandle: () => null }) };
       }
       if (id === './src/voice/actor') return require('../src/voice/actor');
+      if (id === './src/admin/handler') return require('../src/admin/handler');
       if (id === './src/roles/rotation') {
         return { startRoleRotation: async options => {
           roleStarts.push(options);

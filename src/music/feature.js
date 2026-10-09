@@ -161,7 +161,11 @@ async function startMusic({ client, channelId = process.env.PAT_STOPWATCH_CHANNE
   client.on(Events.VoiceStateUpdate, onVoice);
   logger.log('Pim music ready in PAT_STOPWATCH_CHANNEL_ID.');
   let stopped;
-  return { stop() {
+  return { snapshot(guildId) {
+    const queue = manager.queue(guildId);
+    const safeTrack = track => track ? { title: track.title ?? 'Untitled', url: track.url ?? null, duration: track.duration ?? null } : null;
+    return { channelId: queue.channelId, current: safeTrack(queue.current), upcoming: queue.upcoming.map(safeTrack) };
+  }, stop() {
     if (stopped) return stopped;
     client.removeListener(Events.InteractionCreate, onInteraction);
     client.removeListener(Events.VoiceStateUpdate, onVoice);

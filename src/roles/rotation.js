@@ -176,6 +176,21 @@ async function startRoleRotation({ client, guildId, channelId, logger = console,
   void tick();
   return {
     tick,
+    snapshot() {
+      const guild = client.guilds.cache?.get(targetGuildId);
+      return {
+        guildId: targetGuildId ?? null, timezone: 'Asia/Bangkok',
+        lastRotationDate: lastDay === undefined ? null : new Date(lastDay * DAY_MS).toISOString().slice(0, 10),
+        syncing: Boolean(running), needsSync: dirty,
+        entries: targetGuildId ? store.list(targetGuildId).map(({ userId, roleId }) => {
+          const role = guild?.roles.cache.get(roleId);
+          const member = guild?.members.cache.get(userId);
+          return { userId, roleId, name: member?.displayName ?? role?.name ?? userId,
+            color: role?.hexColor ?? '#99aab5', position: role?.position ?? 0,
+            present: Boolean(role && member?.roles?.cache?.has(roleId)) };
+        }).sort((a, b) => b.position - a.position) : [],
+      };
+    },
     async stop() {
       if (stopped) return;
       stopped = true;

@@ -1,6 +1,7 @@
 const { musicError, DEFAULT_STARTUP_TIMEOUT_MS } = require('./source');
 
 function createMusicManager({ source, voice = require('@discordjs/voice'), botUserId,
+  beforeConnect = () => {},
   logger = console, setTimer = setTimeout, clearTimer = clearTimeout,
   idleMs = 60_000, maxQueue = 25, startupTimeoutMs = DEFAULT_STARTUP_TIMEOUT_MS } = {}) {
   const sessions = new Map();
@@ -100,7 +101,10 @@ function createMusicManager({ source, voice = require('@discordjs/voice'), botUs
     const session = { guild, channel, announce, player, connection, entries: [], current: null, closed: false };
     sessions.set(guild.id, session);
     connection.subscribe(player);
-    session.ready = voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 20_000);
+    session.ready = voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 20_000).then(value => {
+      session.voiceReady = true;
+      return value;
+    });
     void session.ready.catch(error => {
       if (active(session)) {
         notify(session, { type: 'error', code: 'VOICE_FAILED' });
@@ -124,6 +128,7 @@ function createMusicManager({ source, voice = require('@discordjs/voice'), botUs
   return {
     async enqueue({ guild, channel, query, requesterId, announce }) {
       if (stopping) throw musicError('CANCELLED');
+      beforeConnect(guild.id);
       let session = sessions.get(guild.id);
       control(session, channel.id);
       session ||= createSession(guild, channel, announce);
@@ -173,7 +178,9 @@ function createMusicManager({ source, voice = require('@discordjs/voice'), botUs
     voiceStateUpdate(oldState, newState) {
       const session = sessions.get(newState.guild?.id ?? oldState.guild?.id);
       if (!session) return;
-      if (botUserId && (newState.id ?? newState.member?.id) === botUserId && newState.channelId !== session.channel.id) {
+      // A prior welcome connection's leave acknowledgement can arrive during this join.
+      if (botUserId && (newState.id ?? newState.member?.id) === botUserId && newState.channelId !== session.channel.id
+        && (newState.channelId !== null || session.voiceReady)) {
         destroy(session);
       } else occupants(session);
     },

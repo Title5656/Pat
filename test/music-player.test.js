@@ -6,7 +6,7 @@ const { createMusicManager } = require('../src/music/player');
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
-function setup({ resolve, open, entersState } = {}) {
+function setup({ resolve, open, entersState, beforeConnect, botUserId } = {}) {
   const players = [], connections = [], opened = [], timers = [];
   const source = {
     resolve: resolve ?? (async name => ({ title: name, url: name, duration: 30 })),
@@ -33,7 +33,7 @@ function setup({ resolve, open, entersState } = {}) {
     },
     entersState: entersState ?? (async value => value),
   };
-  const manager = createMusicManager({ source, voice, logger: { warn() {} },
+  const manager = createMusicManager({ source, voice, beforeConnect, botUserId, logger: { warn() {} },
     setTimer: callback => { const timer = { callback, cleared: false, unref() {} }; timers.push(timer); return timer; },
     clearTimer: timer => { if (timer) timer.cleared = true; } });
   const guild = { id: 'guild', voiceAdapterCreator() {} };
@@ -50,6 +50,29 @@ test('plays FIFO and releases the previous stream on skip', async () => {
   app.manager.skip('guild', 'voice'); await tick();
   assert.equal(app.manager.queue('guild').current.title, 'second');
   assert.equal(app.opened[0].closed, true);
+  app.manager.shutdown();
+});
+
+test('music releases welcome ownership before creating its voice connection', async () => {
+  let released = false;
+  const app = setup({ beforeConnect: guildId => { assert.equal(guildId, 'guild'); released = true; } });
+  await app.enqueue('song');
+  assert.equal(released, true);
+  assert.equal(app.connections.length, 1);
+  app.manager.shutdown();
+});
+
+test('a delayed welcome leave does not destroy music that is still connecting', async () => {
+  const ready = deferred();
+  const app = setup({ botUserId: 'bot', entersState: value => value.options ? ready.promise : Promise.resolve(value) });
+  await app.enqueue('song');
+  const leave = () => app.manager.voiceStateUpdate({ guild: app.guild, channelId: 'voice' }, { guild: app.guild, id: 'bot', channelId: null });
+  leave();
+  assert.equal(app.manager.queue('guild').channelId, 'voice');
+  assert.equal(app.connections[0].destroyed, false);
+  ready.resolve(app.connections[0]); await tick();
+  leave();
+  assert.equal(app.connections[0].destroyed, true);
   app.manager.shutdown();
 });
 

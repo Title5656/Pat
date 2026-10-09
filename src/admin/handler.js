@@ -15,6 +15,14 @@ function createAdminHandler({ client, apiKey = process.env.PIM_ADMIN_API_KEY?.tr
     if (!path.startsWith('/admin/')) return false;
     if (!apiKey) { send(res, 503, { error: 'ADMIN_DISABLED' }); return true; }
     if (!equal(req.headers.authorization ?? '', `Bearer ${apiKey}`)) { send(res, 401, { error: 'UNAUTHORIZED' }); return true; }
+    if (path === '/admin/welcome-members' || path === '/admin/welcome-validate') {
+      try { await require('../welcome/admin').handleWelcomeAdmin({ req, res, client, services, send }); }
+      catch (error) {
+        const code = ['AUDIO_INVALID', 'AUDIO_TOO_LONG', 'FILE_TOO_LARGE', 'AUDIO_URL'].includes(error.code) ? error.code : 'WELCOME_UNAVAILABLE';
+        send(res, code === 'WELCOME_UNAVAILABLE' ? 503 : 400, { error: code });
+      }
+      return true;
+    }
     if (req.method !== 'GET') { send(res, 405, { error: 'METHOD_NOT_ALLOWED' }); return true; }
     if (path !== '/admin/overview') { send(res, 404, { error: 'NOT_FOUND' }); return true; }
     try {
@@ -43,6 +51,7 @@ function createAdminHandler({ client, apiKey = process.env.PIM_ADMIN_API_KEY?.tr
           researchChannelId: env.PAT_RESEARCH_CHANNEL_ID || null, stopwatchChannelId: env.PAT_STOPWATCH_CHANNEL_ID || null,
           chatConfigured: Boolean(env.GEMINI_API_KEY && env.PAT_CHAT_CHANNEL_ID),
           researchRunning: Boolean(services.research), rolesRunning: Boolean(services.roleRotation), musicRunning: Boolean(services.music),
+          welcomeRunning: Boolean(services.welcome),
         },
       });
     } catch {

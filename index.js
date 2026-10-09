@@ -124,12 +124,17 @@ client.once(Events.ClientReady, async (readyClient) => {
   }
   if (process.env.PIM_MUSIC_ENABLED?.trim().toLowerCase() !== 'false') {
     try {
-      music = await require('./src/music/feature').startMusic({ client, channelId: stopwatchChannelId?.trim() });
+      music = await require('./src/music/feature').startMusic({ client, channelId: stopwatchChannelId?.trim(),
+        beforeConnect: guildId => adminServices.welcome?.cancelGuild(guildId) });
       adminServices.music = music;
     } catch (error) {
       console.error(`Pim music could not start; code=${error.code ?? error.name ?? 'unknown'}`);
     }
   }
+  try {
+    adminServices.welcome = require('./src/welcome/feature').startWelcome({ client,
+      musicBusy: guildId => Boolean(adminServices.music?.snapshot(guildId)?.channelId) });
+  } catch { console.error('Pim welcome could not start; code=WELCOME_CONFIGURATION'); }
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
@@ -140,6 +145,7 @@ client.once(Events.ClientReady, async (readyClient) => {
       await roleRotation?.stop();
       await research?.stop();
       await music?.stop();
+      adminServices.welcome?.stop();
       await client.destroy();
       if (healthServer) await new Promise(resolve => healthServer.close(resolve));
       clearTimeout(deadline);

@@ -1,4 +1,4 @@
-# Pat (แพท)
+# Pat (Pat is banned now, we have to change to Pim btw) 
 <!-- Antigravity skill test: passed. -->
 
 บอท Discord สำหรับคุยกับแพทผ่าน Gemini และรวมแจ้งเตือนห้องเสียงจากทุกเซิร์ฟเวอร์ที่บอทเข้าร่วมไว้ในช่องหลัก
